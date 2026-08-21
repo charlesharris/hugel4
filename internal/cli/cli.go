@@ -14,6 +14,7 @@ const usage = `hugel — tend the garden
 
 usage:
   hugel yield [flags]     what sessions cost, and how much of it was context
+  hugel digest [flags]    distil a session into compostable material
 
 run "hugel <command> -h" for flags.
 `
@@ -27,6 +28,8 @@ func Run(args []string) error {
 	switch args[0] {
 	case "yield":
 		return runYield(args[1:])
+	case "digest":
+		return runDigest(args[1:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return nil

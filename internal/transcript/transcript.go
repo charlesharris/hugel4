@@ -71,6 +71,12 @@ type Session struct {
 	End      time.Time `json:"end"`
 	Prompts  int       `json:"prompts"`
 	Requests []Request `json:"-"`
+
+	// Activity is what the session did, normalised and bounded. It is the raw
+	// material the composter distils; nothing here is authoritative state.
+	Asks  []Prompt  `json:"-"`
+	Notes []Note    `json:"-"`
+	Tools []ToolUse `json:"-"`
 }
 
 // Duration is wall-clock from first to last recorded event.
@@ -171,9 +177,71 @@ type rawRecord struct {
 	IsMeta      bool   `json:"isMeta"`
 	Effort      string `json:"effort"`
 	Message     struct {
-		Model string    `json:"model"`
-		Usage *rawUsage `json:"usage"`
+		Model   string          `json:"model"`
+		Usage   *rawUsage       `json:"usage"`
+		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
+}
+
+// contentBlock is one element of a message's content array. Claude Code also
+// writes plain-string content for simple turns, handled separately.
+type contentBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name"`
+	ID        string          `json:"id"`
+	ToolUseID string          `json:"tool_use_id"`
+	Input     json.RawMessage `json:"input"`
+}
+
+// blocks decodes a message's content, which is either an array of blocks or a
+// bare string for simple turns.
+func blocks(raw json.RawMessage) []contentBlock {
+	if len(raw) == 0 {
+		return nil
+	}
+	var bs []contentBlock
+	if err := json.Unmarshal(raw, &bs); err == nil {
+		return bs
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil && text != "" {
+		return []contentBlock{{Type: "text", Text: text}}
+	}
+	return nil
+}
+
+// toolResult is the union of result shapes hugel understands. Unknown shapes
+// decode to zero values and are simply not described.
+type toolResult struct {
+	Stdout      string `json:"stdout"`
+	Stderr      string `json:"stderr"`
+	Interrupted bool   `json:"interrupted"`
+	FilePath    string `json:"filePath"`
+	Type        string `json:"type"`
+}
+
+// toolInput is the union of tool argument shapes hugel summarises.
+type toolInput struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	FilePath    string `json:"file_path"`
+	Path        string `json:"path"`
+	Pattern     string `json:"pattern"`
+	Prompt      string `json:"prompt"`
+	Skill       string `json:"skill"`
+	Query       string `json:"query"`
+}
+
+// subject picks the most identifying argument for a tool call.
+func (i toolInput) subject() string {
+	for _, v := range []string{i.Command, i.FilePath, i.Path, i.Pattern, i.Query, i.Skill, i.Prompt} {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // --- parsing ---------------------------------------------------------------
@@ -207,6 +275,7 @@ func ParseFile(path string) (*Session, error) {
 func Parse(r io.Reader) (*Session, error) {
 	s := &Session{}
 	seen := make(map[string]bool)
+	pending := make(map[string]int) // tool_use id -> index in s.Tools
 
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -244,10 +313,46 @@ func Parse(r io.Reader) (*Session, error) {
 		case "user":
 			// isMeta marks injected/system-authored user turns, not something
 			// the gardener typed.
-			if !rec.IsMeta && !rec.IsSidechain {
+			real := !rec.IsMeta && !rec.IsSidechain
+			if real {
 				s.Prompts++
 			}
+			at, _ := time.Parse(time.RFC3339, rec.Timestamp)
+			for _, b := range blocks(rec.Message.Content) {
+				switch b.Type {
+				case "text":
+					if real && strings.TrimSpace(b.Text) != "" {
+						s.Asks = append(s.Asks, Prompt{At: at, Text: strings.TrimSpace(b.Text)})
+					}
+				case "tool_result":
+					if i, ok := pending[b.ToolUseID]; ok {
+						attachResult(&s.Tools[i], rec.ToolUseResult)
+						delete(pending, b.ToolUseID)
+					}
+				}
+			}
 		case "assistant":
+			at, _ := time.Parse(time.RFC3339, rec.Timestamp)
+			for _, b := range blocks(rec.Message.Content) {
+				switch b.Type {
+				case "text":
+					if t := strings.TrimSpace(b.Text); t != "" {
+						s.Notes = append(s.Notes, Note{At: at, Text: t})
+					}
+				case "tool_use":
+					var in toolInput
+					_ = json.Unmarshal(b.Input, &in)
+					s.Tools = append(s.Tools, ToolUse{
+						At:     at,
+						Name:   b.Name,
+						Target: clip(in.subject(), excerptLimit),
+						Detail: in.Description,
+					})
+					if b.ID != "" {
+						pending[b.ID] = len(s.Tools) - 1
+					}
+				}
+			}
 			if rec.Message.Usage == nil {
 				continue
 			}
@@ -259,7 +364,6 @@ func Parse(r io.Reader) (*Session, error) {
 				continue // same request, already counted
 			}
 			seen[key] = true
-			at, _ := time.Parse(time.RFC3339, rec.Timestamp)
 			u := rec.Message.Usage.toUsage()
 			speed := rec.Message.Usage.Speed
 			if speed == "" {
@@ -281,6 +385,26 @@ func Parse(r io.Reader) (*Session, error) {
 	}
 	sort.Slice(s.Requests, func(i, j int) bool { return s.Requests[i].At.Before(s.Requests[j].At) })
 	return s, nil
+}
+
+// attachResult folds a tool's recorded outcome back onto its invocation.
+// Claude Code does not record an exit code, so failure is inferred from an
+// interrupt or from anything written to stderr — which is a hint, not a
+// verdict, since plenty of healthy tools write to stderr.
+func attachResult(t *ToolUse, raw json.RawMessage) {
+	if len(raw) == 0 {
+		return
+	}
+	var r toolResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return
+	}
+	t.Output = clip(strings.TrimSpace(r.Stdout), excerptLimit)
+	t.Stderr = clip(strings.TrimSpace(r.Stderr), excerptLimit)
+	t.Errored = r.Interrupted || strings.TrimSpace(r.Stderr) != ""
+	if t.Target == "" && r.FilePath != "" {
+		t.Target = r.FilePath
+	}
 }
 
 // bedFromSlug recovers a bed name from Claude Code's flattened project

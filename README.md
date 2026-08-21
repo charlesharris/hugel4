@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. One command works.
+Earliest days. Two commands work.
 
 ## `hugel yield`
 
@@ -44,6 +44,28 @@ not it is ever used; a subagent that forages in its own context and returns a
 summary pays it on almost nothing.
 
 Context tax above ~85% means the session is mostly paying to remember itself.
+
+## `hugel digest`
+
+Stage one of composting: mechanical, free, bounded.
+
+```
+hugel digest --session ID      distil one session
+hugel digest --all             size report across every session
+```
+
+A session becomes a few thousand characters describing what was asked, what
+changed, what ran, and what broke. The bound is the point. A twenty-hour
+session that read 350M tokens of context distils to the same ~4k tokens as a
+five-minute one, so composting costs about the same whatever it is composting.
+A composter that produces waste is not a composter.
+
+Distillation is lossy on purpose and says so: every section reports what it
+dropped. Prompts and agent notes are taken from both ends of the session —
+intent lives at the start and outcome at the end, while the middle is the work
+itself, which the file and command records already describe.
+
+Stage two, extraction into typed pile entries, is not built yet.
 
 ## Two things the transcripts get wrong if you read them naively
 
