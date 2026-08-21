@@ -55,6 +55,17 @@ func (d *Digest) Render() string {
 		}
 	}
 
+	if len(d.Records) > 0 {
+		b.WriteString("\n## recorded\n")
+		for _, r := range d.Records {
+			if r.Bead != "" {
+				fmt.Fprintf(&b, "- [%s] %s\n", r.Bead, r.Subject)
+				continue
+			}
+			fmt.Fprintf(&b, "- %s\n", r.Subject)
+		}
+	}
+
 	if len(d.Troubles) > 0 {
 		b.WriteString("\n## went wrong\n")
 		for _, t := range d.Troubles {

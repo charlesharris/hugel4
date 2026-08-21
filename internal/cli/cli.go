@@ -15,6 +15,7 @@ const usage = `hugel — tend the garden
 usage:
   hugel yield [flags]     what sessions cost, and how much of it was context
   hugel digest [flags]    distil a session into compostable material
+  hugel compost [flags]   turn spent sessions into pile entries
   hugel pile <cmd>        the knowledge store
 
 run "hugel <command> -h" for flags.
@@ -31,6 +32,8 @@ func Run(args []string) error {
 		return runYield(args[1:])
 	case "digest":
 		return runDigest(args[1:])
+	case "compost":
+		return runCompost(args[1:])
 	case "pile":
 		return runPile(args[1:])
 	case "-h", "--help", "help":

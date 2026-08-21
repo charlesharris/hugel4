@@ -342,10 +342,14 @@ func Parse(r io.Reader) (*Session, error) {
 				case "tool_use":
 					var in toolInput
 					_ = json.Unmarshal(b.Input, &in)
+					limit := excerptLimit
+					if b.Name == "Bash" {
+						limit = commandLimit
+					}
 					s.Tools = append(s.Tools, ToolUse{
 						At:     at,
 						Name:   b.Name,
-						Target: clip(in.subject(), excerptLimit),
+						Target: clip(in.subject(), limit),
 						Detail: in.Description,
 					})
 					if b.ID != "" {

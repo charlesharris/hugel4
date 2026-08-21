@@ -83,6 +83,7 @@ type Digest struct {
 	Edited   []FileTouch  `json:"edited,omitempty"`
 	Read     []FileTouch  `json:"read,omitempty"`
 	Commands []CommandUse `json:"commands,omitempty"`
+	Records  []Record     `json:"records,omitempty"`
 	Troubles []Trouble    `json:"troubles,omitempty"`
 
 	ToolCalls  int          `json:"tool_calls"`
@@ -115,6 +116,8 @@ func Distil(s *transcript.Session, b Budget) *Digest {
 		case t.Reads():
 			touch(files, t.Target).Reads++
 		case t.Name == "Bash" && t.Target != "":
+			d.Records = append(d.Records, commitsIn(t.Target)...)
+			d.Records = append(d.Records, beadRecordsIn(t.Target)...)
 			// A shell session changes files by redirection, not by the Edit
 			// tool. Missing those makes "what changed" -- the most useful
 			// signal a digest carries -- read as empty for exactly the

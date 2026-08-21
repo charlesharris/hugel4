@@ -8,6 +8,12 @@ import "time"
 // distiller's job harder rather than easier.
 const excerptLimit = 800
 
+// commandLimit is larger because a command is sometimes the record itself. A
+// commit message written through a heredoc carries the reasoning for a change,
+// which is exactly the material worth composting; clipping it at the output
+// limit would truncate the knowledge and keep the noise.
+const commandLimit = 4000
+
 // Prompt is something the gardener actually asked for. These are the highest
 // signal and lowest volume records in a transcript.
 type Prompt struct {

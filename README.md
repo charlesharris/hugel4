@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Three commands work.
+Earliest days. Four commands work.
 
 ## `hugel yield`
 
@@ -66,6 +66,34 @@ intent lives at the start and outcome at the end, while the middle is the work
 itself, which the file and command records already describe.
 
 Stage two, extraction into typed pile entries, is not built yet.
+
+## `hugel compost`
+
+Stage two: turn distilled sessions into pile entries.
+
+```
+hugel compost --session ID     compost one session
+hugel compost --all            compost every session
+hugel compost --all --dry-run  show what would be written
+```
+
+The first extractor is free and reads only **deliberate records** — commit
+messages, and beads closed with a reason. Those are things someone chose to
+write down as a record, describing changes that demonstrably happened, so the
+extractor reports rather than infers. Agent prose is richer and would yield more
+entries, but prose is where an extractor invents things, and an invented entry
+in a permanent cross-project pile is worse than a missing one.
+
+That baseline matters beyond precision: any model-backed extractor has to beat
+free entries a gardener actually keeps, and now there is a zero to measure it
+against.
+
+Entries arrive `unreviewed`, and this extractor always proposes `scope: bed`.
+An earlier version guessed at generality and marked 89 of 138 entries general,
+including dense project-specific notes whose only crime was arguing a decision
+without citing a filename. Absence of evidence of bed-specificity is not
+evidence of generality — and guessing wrong in that direction sends an entry
+into every other bed's soil, which is what scope exists to prevent.
 
 ## `hugel pile`
 

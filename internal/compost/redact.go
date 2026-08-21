@@ -26,6 +26,12 @@ func (d *Digest) Redact(r *redact.Redactor) []redact.Hit {
 		d.Commands[i].Command, hits = r.Redact(d.Commands[i].Command)
 		collect(hits)
 	}
+	for i := range d.Records {
+		d.Records[i].Subject, hits = r.Redact(d.Records[i].Subject)
+		collect(hits)
+		d.Records[i].Body, hits = r.Redact(d.Records[i].Body)
+		collect(hits)
+	}
 	for i := range d.Troubles {
 		d.Troubles[i].Where, hits = r.Redact(d.Troubles[i].Where)
 		collect(hits)
