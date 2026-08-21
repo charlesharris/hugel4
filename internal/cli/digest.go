@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charris/hugel/internal/compost"
+	"github.com/charris/hugel/internal/redact"
 	"github.com/charris/hugel/internal/transcript"
 )
 
@@ -55,13 +56,18 @@ flags:
 	}
 
 	budget := compost.DefaultBudget()
+	// Redaction is not optional. A digest is the only thing that leaves memory
+	// on its way to a permanent, cross-project pile.
+	scrub := redact.FromEnv()
 
 	if *all {
 		fmt.Printf("%-10s %-16s %7s %9s %8s %7s  %s\n",
 			"SESSION", "BED", "TOOLS", "CTX READ", "DIGEST", "RATIO", "")
 		fmt.Println(strings.Repeat("─", 76))
+		var found int
 		for _, s := range sessions {
 			d := compost.Distil(s, budget)
+			found += redact.Total(d.Redact(scrub))
 			ctx := s.Usage().ContextRead()
 			// Rough but honest: characters per token averages near four.
 			ratio := 0.0
@@ -71,6 +77,9 @@ flags:
 			fmt.Printf("%-10s %-16s %7d %9s %8s %6.4f%%\n",
 				truncate(s.ID, 10), truncate(s.Bed, 16), len(s.Tools),
 				tokens(ctx), tokens(d.Size()/4)+"t", ratio*100)
+		}
+		if found > 0 {
+			fmt.Printf("\nredacted %d credentials across these digests\n", found)
 		}
 		return nil
 	}
@@ -89,6 +98,7 @@ flags:
 	}
 
 	d := compost.Distil(match, budget)
+	hits := d.Redact(scrub)
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -96,5 +106,8 @@ flags:
 	}
 	fmt.Print(d.Render())
 	fmt.Fprintf(os.Stderr, "\n[%s]\n", d)
+	if n := redact.Total(hits); n > 0 {
+		fmt.Fprintf(os.Stderr, "[redacted %d credentials: %v]\n", n, hits)
+	}
 	return nil
 }

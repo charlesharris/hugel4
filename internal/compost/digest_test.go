@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charris/hugel/internal/redact"
 	"github.com/charris/hugel/internal/transcript"
 )
 
@@ -158,3 +159,77 @@ func synthetic(n int) *transcript.Session {
 	}
 	return s
 }
+
+// A bypass-mode session changes files by redirection rather than by the Edit
+// tool. Missing those makes "what changed" read as empty for exactly the
+// sessions that did the most work.
+func TestWrittenPaths(t *testing.T) {
+	tests := []struct {
+		name, in string
+		want     []string
+	}{
+		{"heredoc", "cat > internal/x.go <<'EOF'\npackage x\nEOF", []string{"internal/x.go"}},
+		{"append", "echo hi >> notes.txt", []string{"notes.txt"}},
+		{"tee", "make 2>&1 | tee build.log", []string{"build.log"}},
+		{"sed in place", "sed -i '' 's/a/b/' internal/y.go", []string{"internal/y.go"}},
+		{"copy", "cp a.go b.go", []string{"b.go"}},
+		{"two redirects", "cat > a.txt <<E\nE\ncat > b.txt <<E\nE", []string{"a.txt", "b.txt"}},
+		{"device is not a file", "cmd > /dev/null", nil},
+		{"stderr merge is not a file", "cmd 2>&1", nil},
+		{"unexpanded shell is not a claim", "cat > $OUT/x.go <<E", nil},
+		{"read only", "grep -rn foo internal", nil},
+		// A heredoc body is data being written, not shell being run. Reading it
+		// as commands invents files that were never touched -- which is exactly
+		// how a test fixture mentioning a redirect ends up in the pile.
+		{"heredoc body is not shell", "cat > t_test.go <<'EOF'\n{\"append\", \"echo hi >> notes.txt\"}\nEOF", []string{"t_test.go"}},
+		{"heredoc then real command", "cat > a.go <<'EOF'\nx\nEOF\ncp a.go b.go", []string{"a.go", "b.go"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := writtenPaths(tt.in)
+			if len(got) != len(tt.want) {
+				t.Fatalf("writtenPaths(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// The fixture that matters: an injected secret must not survive into anything
+// the pile could ever see.
+func TestRedactedDigestNeverCarriesTheSecret(t *testing.T) {
+	const secret = "ghp_AbCdEf0123456789AbCdEf0123456789"
+	s := &transcript.Session{ID: "s", Bed: "b", Start: time.Now(), End: time.Now()}
+	s.Asks = []transcript.Prompt{{Text: "deploy with token " + secret}}
+	s.Notes = []transcript.Note{{Text: strings.Repeat("x", 130) + " using " + secret}}
+	s.Tools = []transcript.ToolUse{
+		{Name: "Bash", Target: "curl -H 'Authorization: Bearer " + secret + "' https://api", Errored: true,
+			Stderr: "401 with " + secret},
+		{Name: "Edit", Target: "/tmp/" + secret + "/config.go"},
+	}
+
+	d := Distil(s, DefaultBudget())
+	if !strings.Contains(d.Render(), secret) {
+		t.Fatal("fixture is not exercising anything: the secret never reached the digest")
+	}
+
+	hits := d.Redact(redactor())
+	out := d.Render()
+	if strings.Contains(out, secret) {
+		t.Errorf("secret survived redaction:\n%s", out)
+	}
+	if len(hits) == 0 || len(d.Redactions) == 0 {
+		t.Error("redaction was silent; it must be recorded")
+	}
+	for _, h := range d.Redactions {
+		if strings.Contains(string(h.Class), secret) {
+			t.Error("the record of the redaction leaked the value")
+		}
+	}
+}
+
+func redactor() *redact.Redactor { return redact.New() }

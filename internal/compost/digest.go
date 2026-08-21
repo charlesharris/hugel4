@@ -15,10 +15,12 @@ package compost
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/redact"
 	"github.com/charris/hugel/internal/transcript"
 )
 
@@ -83,8 +85,9 @@ type Digest struct {
 	Commands []CommandUse `json:"commands,omitempty"`
 	Troubles []Trouble    `json:"troubles,omitempty"`
 
-	ToolCalls int `json:"tool_calls"`
-	Truncated struct {
+	ToolCalls  int          `json:"tool_calls"`
+	Redactions []redact.Hit `json:"redactions,omitempty"`
+	Truncated  struct {
 		Asks     int `json:"asks,omitempty"`
 		Notes    int `json:"notes,omitempty"`
 		Files    int `json:"files,omitempty"`
@@ -112,6 +115,13 @@ func Distil(s *transcript.Session, b Budget) *Digest {
 		case t.Reads():
 			touch(files, t.Target).Reads++
 		case t.Name == "Bash" && t.Target != "":
+			// A shell session changes files by redirection, not by the Edit
+			// tool. Missing those makes "what changed" -- the most useful
+			// signal a digest carries -- read as empty for exactly the
+			// sessions that did the most work.
+			for _, p := range writtenPaths(t.Target) {
+				touch(files, p).Writes++
+			}
 			c := cmds[normaliseCommand(t.Target)]
 			if c == nil {
 				c = &CommandUse{Command: normaliseCommand(t.Target)}
@@ -369,6 +379,85 @@ func harnessNoise(s string) bool {
 		}
 	}
 	return strings.HasPrefix(s, "[Request interrupted") || strings.HasPrefix(s, "API Error")
+}
+
+// redirection matches the shell forms that create or replace a file.
+var redirection = regexp.MustCompile(`(?:^|[|&;]|\s)(?:>>?|tee(?:\s+-a)?)\s+"?'?([^\s"'|&;<>]+)`)
+
+// lastArgWriters are commands whose target is their final argument.
+var lastArgWriters = regexp.MustCompile(`^(?:sed\s+-i|cp|mv|install)\b`)
+
+// writtenPaths guesses which files a shell command created or replaced. It is
+// deliberately conservative: a missed file costs the digest some detail, while
+// a wrong one puts a claim in the pile about something that never happened.
+func writtenPaths(cmd string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		p = strings.Trim(strings.TrimSpace(p), `"'`)
+		switch {
+		case p == "", seen[p]:
+			return
+		case strings.HasPrefix(p, "/dev/"), strings.HasPrefix(p, "&"):
+			return // a device or a descriptor, not a file
+		case strings.ContainsAny(p, "$`*?"):
+			return // unexpanded shell: hugel does not know what this was
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	for _, line := range commandLines(cmd) {
+		for _, seg := range splitCommands(line) {
+			for _, m := range redirection.FindAllStringSubmatch(seg, -1) {
+				add(m[1])
+			}
+			if lastArgWriters.MatchString(strings.TrimSpace(seg)) {
+				if f := strings.Fields(seg); len(f) > 1 {
+					add(f[len(f)-1])
+				}
+			}
+		}
+	}
+	return out
+}
+
+// heredocStart finds the terminator word of a heredoc opened on a line.
+var heredocStart = regexp.MustCompile(`<<-?\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?`)
+
+// commandLines yields the lines of a command that are actually commands. A
+// heredoc body is data being written, not instructions being run, and reading
+// it as shell invents files that were never touched -- a test fixture that
+// mentions "echo hi >> notes.txt" would otherwise put notes.txt in the pile.
+func commandLines(cmd string) []string {
+	var out []string
+	var terminator string
+	for _, line := range strings.Split(cmd, "\n") {
+		if terminator != "" {
+			if strings.TrimSpace(line) == terminator {
+				terminator = ""
+			}
+			continue
+		}
+		out = append(out, line)
+		if m := heredocStart.FindStringSubmatch(line); m != nil {
+			terminator = m[1]
+		}
+	}
+	return out
+}
+
+// splitCommands breaks a line at shell separators so that the last argument of
+// one command is not mistaken for the last argument of the line.
+func splitCommands(line string) []string {
+	segs := []string{line}
+	for _, sep := range []string{"&&", "||", ";", "|"} {
+		var next []string
+		for _, s := range segs {
+			next = append(next, strings.Split(s, sep)...)
+		}
+		segs = next
+	}
+	return segs
 }
 
 func describe(t transcript.ToolUse) string {
