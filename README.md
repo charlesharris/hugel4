@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Two commands work.
+Earliest days. Three commands work.
 
 ## `hugel yield`
 
@@ -66,6 +66,36 @@ intent lives at the start and outcome at the end, while the middle is the work
 itself, which the file and command records already describe.
 
 Stage two, extraction into typed pile entries, is not built yet.
+
+## `hugel pile`
+
+The knowledge store: typed entries composted out of sessions, shared across
+every bed.
+
+```
+hugel pile init              create the pile and its git repository
+hugel pile import <dir>      take in legacy markdown entries
+hugel pile list [--stats]    what the pile knows
+hugel pile show <id>         one entry in full
+```
+
+Lives at `~/.hugel/pile` unless `HUGEL_PILE` says otherwise. **The files are the
+source of truth.** Any index built over them is derived and disposable,
+rebuildable by re-reading the directory. An earlier Hugel made a graph database
+authoritative, which meant the knowledge died with a container volume.
+
+Git is the storage mechanism, not something you operate: hugel initialises the
+repository and commits what it writes. It supplies the temporal layer for free —
+superseding an entry is a commit, and an entry's lineage is its log.
+
+Nothing that changes when an entry is merely *read* belongs in these files.
+Usage counts live in the derived index, or every soil lookup would dirty the
+repository.
+
+Writes converge rather than duplicate. An entry's identity is its scope, type
+and normalised title, so re-composting a session updates in place; an entry
+whose content is unchanged is not rewritten at all, so a compost run that
+learned nothing leaves no diff.
 
 ## Two things the transcripts get wrong if you read them naively
 
