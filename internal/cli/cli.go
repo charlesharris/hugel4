@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -17,6 +18,8 @@ usage:
   hugel digest [flags]    distil a session into compostable material
   hugel compost [flags]   turn spent sessions into pile entries
   hugel pile <cmd>        the knowledge store
+  hugel soil <query>      draw context from the pile
+  hugel bed <cmd>         the projects the garden knows
 
 run "hugel <command> -h" for flags.
 `
@@ -36,6 +39,10 @@ func Run(args []string) error {
 		return runCompost(args[1:])
 	case "pile":
 		return runPile(args[1:])
+	case "soil":
+		return runSoil(args[1:])
+	case "bed":
+		return runBed(args[1:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return nil
@@ -133,4 +140,22 @@ func truncate(s string, n int) string {
 		return s[:n]
 	}
 	return s[:n-1] + "…"
+}
+
+// parseInterleaved lets flags appear after positional arguments, so
+// `hugel soil "a question" --bed x` works. Go's flag package stops at the
+// first non-flag, which would silently fold "--bed x" into the question.
+func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positional []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			return positional, nil
+		}
+		positional = append(positional, rest[0])
+		args = rest[1:]
+	}
 }

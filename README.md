@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Four commands work.
+Earliest days. Six commands work.
 
 ## `hugel yield`
 
@@ -124,6 +124,48 @@ Writes converge rather than duplicate. An entry's identity is its scope, type
 and normalised title, so re-composting a session updates in place; an entry
 whose content is unchanged is not rewritten at all, so a compost run that
 learned nothing leaves no diff.
+
+## `hugel soil`
+
+Draw context from the pile.
+
+```
+hugel soil "what the work is about" --bed NAME [--budget 1500]
+```
+
+Soil is not the pile — it is the small, selected part of it delivered to one
+piece of work, and delivering less of it is the whole discipline. **The budget
+is the feature.** An unbounded lookup that returned everything relevant would
+reproduce the problem soil exists to solve: context that arrives early, stays
+for the session, and is re-read on every turn.
+
+Retrieval is BM25, local, no embeddings and no service. At this size a good
+ranking function beats a vector database, and the pile has to prove it deserves
+one before it gets one.
+
+Relevance alone is the wrong ranking for a shared pile — another project's entry
+can match the words perfectly and still be the wrong knowledge. So lexical score
+is weighted by three things a search engine has no reason to care about: whether
+this bed earned the knowledge, whether a human vouched for it, and how long ago
+it was true. Rejected and abandoned entries are dropped rather than
+down-weighted; knowledge someone threw away should not surface at all.
+
+One entry cannot spend the whole budget. Soil is a survey of what the pile
+knows; reading an entry in full is a second, deliberate step.
+
+## `hugel bed`
+
+```
+hugel bed kin hugel4 hugel hugel-core    record that these are one project
+hugel bed list
+```
+
+A project renamed across rewrites leaves knowledge filed under every name it
+ever had. Without kinship, soil in the new bed treats the old bed as another
+project's business — so a project's oldest and most settled decisions rank
+lowest exactly because they are old. Measured, not hypothetical: declaring
+kinship moved the entry that actually answered a question from sixth place to
+first.
 
 ## Two things the transcripts get wrong if you read them naively
 

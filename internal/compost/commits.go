@@ -76,6 +76,7 @@ func commitsIn(cmd string) []Record {
 
 func newCommit(msg string) Record {
 	msg = strings.TrimSpace(msg)
+	msg = stripTrailers(msg)
 	subject, body, _ := strings.Cut(msg, "\n")
 	subject = strings.TrimSpace(subject)
 	return Record{
@@ -100,4 +101,26 @@ func (c Record) trivial() bool {
 		}
 	}
 	return false
+}
+
+// trailerKey matches a git trailer: a "Key: value" line in the message footer.
+var trailerKey = regexp.MustCompile(`^[A-Z][A-Za-z-]*:\s`)
+
+// stripTrailers removes the git footer. Co-Authored-By and friends are
+// provenance for the repository, and in the pile they are noise that every
+// entry carries and no reader wants.
+func stripTrailers(msg string) string {
+	lines := strings.Split(msg, "\n")
+	cut := len(lines)
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := strings.TrimSpace(lines[i])
+		if l == "" {
+			continue
+		}
+		if !trailerKey.MatchString(l) {
+			break
+		}
+		cut = i
+	}
+	return strings.TrimSpace(strings.Join(lines[:cut], "\n"))
 }
