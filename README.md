@@ -306,8 +306,28 @@ wired into live hooks; it keeps the name until it retires.
 
 ```
 hugel bed kin hugel4 hugel hugel-core    record that these are one project
-hugel bed list
+hugel bed list                           where each bed lives, and what work is open
 ```
+
+A bed is named for a working directory, and until now that name was all hugel
+kept — enough to group knowledge, not enough to find the project again.
+Transcripts record the cwd of every session, so the mapping is derived rather
+than configured, and the most recent session wins: a project that moved leaves
+sessions under both paths, and the one worked in last is the one that exists.
+
+Open work comes from **bd**, which owns it. hugel reads and never writes: bd is
+the work model — beads, dependencies, a ready queue — and hugel is the knowledge
+and accounting model. Two views of one tracker beat two trackers.
+
+`blocked` is derived rather than stored, the same way bd derives it, so hugel
+cannot invent a fourth status nobody else uses. Readiness is bd's answer, asked
+for directly, because recomputing it here would drift on defer dates and gates
+away from the queue tenders actually pull from.
+
+Beds with pile entries but no recorded directory are named at the foot of the
+table. An imported corpus, or a project not worked in since hugel started
+watching, has knowledge with nowhere to point — better said than quietly left
+out of the count.
 
 A project renamed across rewrites leaves knowledge filed under every name it
 ever had. Without kinship, soil in the new bed treats the old bed as another
@@ -340,6 +360,7 @@ internal/pricing/     usage -> dollars
 internal/yield/       accounting and roll-ups
 internal/draws/       what the pile was asked, and what it handed over
 internal/tend/        the working surface
+internal/beads/       reading work from bd
 internal/cli/         thin command drivers, no domain logic
 skills/hugel-soil/    the agent-facing way to draw soil
 ```

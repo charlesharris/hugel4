@@ -422,3 +422,34 @@ func bedFromSlug(slug string) string {
 	}
 	return slug
 }
+
+// BedDirs maps each bed to the directory it was last worked in.
+//
+// A bed is named for a working directory, and until now that name was all
+// hugel kept: enough to group knowledge, not enough to find the project again.
+// Transcripts record the cwd of every session, so the mapping is derivable
+// rather than something a gardener has to configure and keep true.
+//
+// The most recent session wins. A project that moved leaves sessions under both
+// paths, and the one worked in last is the one that still exists.
+func BedDirs(sessions []*Session) map[string]string {
+	type seen struct {
+		dir  string
+		when time.Time
+	}
+	best := map[string]seen{}
+	for _, s := range sessions {
+		if s.Bed == "" || s.CWD == "" {
+			continue
+		}
+		if b, ok := best[s.Bed]; ok && !s.End.After(b.when) {
+			continue
+		}
+		best[s.Bed] = seen{dir: s.CWD, when: s.End}
+	}
+	out := make(map[string]string, len(best))
+	for bed, b := range best {
+		out[bed] = b.dir
+	}
+	return out
+}
