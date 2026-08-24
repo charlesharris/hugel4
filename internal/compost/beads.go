@@ -9,11 +9,12 @@ import (
 // decision record its author wrote by hand. Mining those is reporting, not
 // inference.
 var (
-	beadClose  = regexp.MustCompile(`(?:^|[|&;]\s*|\s)bd\s+close\s+(\S+)[^\n]*?--reason\s+(?:"([^"]*)"|'([^']*)')`)
-	beadCreate = regexp.MustCompile(`(?:^|[|&;]\s*|\s)bd\s+create\s+(?:"([^"]*)"|'([^']*)')`)
-	beadType   = regexp.MustCompile(`-t\s+(\w+)`)
-	beadDesc   = regexp.MustCompile(`-d\s+(?:"([^"]*)"|'([^']*)')`)
-	beadID     = regexp.MustCompile(`\b([a-z]{2,5}-[a-z0-9]*[a-z][a-z0-9]*(?:\.\d+)*)\b`)
+	beadClose    = regexp.MustCompile(`(?:^|[|&;]\s*|\s)bd\s+close\s+(\S+)[^\n]*?--reason\s+(?:"([^"]*)"|'([^']*)')`)
+	beadCreate   = regexp.MustCompile(`(?:^|[|&;]\s*|\s)bd\s+create\s+(?:"([^"]*)"|'([^']*)')`)
+	beadRemember = regexp.MustCompile(`(?:^|[|&;]\s*|\s)bd\s+remember\s+(?:"([^"]*)"|'([^']*)')`)
+	beadType     = regexp.MustCompile(`-t\s+(\w+)`)
+	beadDesc     = regexp.MustCompile(`-d\s+(?:"([^"]*)"|'([^']*)')`)
+	beadID       = regexp.MustCompile(`\b([a-z]{2,5}-[a-z0-9]*[a-z][a-z0-9]*(?:\.\d+)*)\b`)
 	// A record whose subject opens with an identifier and a colon is naming its
 	// work item. That leading position is what makes it safe to read an
 	// uppercase token as a bead rather than as "UTF-8" or "SHA-256".
@@ -98,6 +99,35 @@ func beadsIn(s string) []string {
 			seen[m[1]] = true
 			out = append(out, m[1])
 		}
+	}
+	return out
+}
+
+// memoryRecordsIn pulls `bd remember` out of a shell command.
+//
+// A memory is the highest-intent record bd produces: someone read a session,
+// decided one sentence of it should outlive the session, and wrote it down for
+// no other purpose. That is what the pile is for, and mining it is reporting
+// rather than inference.
+//
+// It is not, however, evidence in the way a commit is. A commit message
+// describes a change that demonstrably happened; a memory is an assertion with
+// no diff behind it, and it may be written by an agent rather than a person.
+// So it is composted with a lower confidence than a recorded change and, like
+// everything else, arrives unreviewed.
+func memoryRecordsIn(cmd string) []Record {
+	if !strings.Contains(cmd, "bd ") {
+		return nil
+	}
+	joined := strings.ReplaceAll(cmd, "\\\n", " ")
+	var out []Record
+	for _, m := range beadRemember.FindAllStringSubmatch(joined, -1) {
+		text := strings.TrimSpace(m[1] + m[2])
+		if text == "" {
+			continue
+		}
+		subject, body := firstSentence(text)
+		out = append(out, Record{Kind: KindMemory, Subject: subject, Body: body})
 	}
 	return out
 }

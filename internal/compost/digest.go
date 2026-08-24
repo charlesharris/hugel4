@@ -118,6 +118,7 @@ func Distil(s *transcript.Session, b Budget) *Digest {
 		case t.Name == "Bash" && t.Target != "":
 			d.Records = append(d.Records, commitsIn(t.Target)...)
 			d.Records = append(d.Records, beadRecordsIn(t.Target)...)
+			d.Records = append(d.Records, memoryRecordsIn(t.Target)...)
 			// A shell session changes files by redirection, not by the Edit
 			// tool. Missing those makes "what changed" -- the most useful
 			// signal a digest carries -- read as empty for exactly the

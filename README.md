@@ -94,11 +94,19 @@ hugel compost --all --dry-run  show what would be written
 ```
 
 The first extractor is free and reads only **deliberate records** — commit
-messages, and beads closed with a reason. Those are things someone chose to
+messages, beads closed with a reason, and `bd remember` memories. Those are things someone chose to
 write down as a record, describing changes that demonstrably happened, so the
 extractor reports rather than infers. Agent prose is richer and would yield more
 entries, but prose is where an extractor invents things, and an invented entry
 in a permanent cross-project pile is worse than a missing one.
+
+A memory is the highest-intent record of the three: someone read a session,
+decided one sentence of it should outlive the session, and wrote it down for no
+other purpose. It is also the weakest evidence — a commit describes a change
+that demonstrably happened, while a memory is an assertion with no diff behind
+it, possibly written by an agent. So memories compost as `discovery` rather than
+`decision`, at a lower confidence than a recorded change. bd keeps its memories
+for priming; the pile keeps them for every other project.
 
 That baseline matters beyond precision: any model-backed extractor has to beat
 free entries a gardener actually keeps, and now there is a zero to measure it

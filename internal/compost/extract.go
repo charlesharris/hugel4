@@ -89,6 +89,13 @@ func (h Heuristic) Extract(d *Digest) (Harvest, error) {
 }
 
 func recordType(r Record) pile.Type {
+	if r.Kind == KindMemory {
+		// A memory says how something is, not what was chosen. Typing it as a
+		// decision would credit it with a deliberation that never happened.
+		// Discovery is the honest default; review is where a constraint or a
+		// pattern gets recognised as one.
+		return pile.Discovery
+	}
 	if r.Revert {
 		// A revert is the one commit shape that records a failure rather than a
 		// choice: something was tried, and taken back.
@@ -98,6 +105,11 @@ func recordType(r Record) pile.Type {
 }
 
 func confidence(r Record) float64 {
+	if r.Kind == KindMemory {
+		// Deliberately written to outlive its session, but asserted rather than
+		// demonstrated: no diff, no closed work, and possibly no human.
+		return 0.5
+	}
 	if strings.TrimSpace(r.Body) == "" {
 		return 0.4 // a subject alone states what, never why
 	}

@@ -1,6 +1,11 @@
 package compost
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charris/hugel/internal/pile"
+)
 
 func TestCommitsIn(t *testing.T) {
 	tests := []struct {
@@ -108,5 +113,57 @@ func TestFirstSentence(t *testing.T) {
 	}
 	if rest != long {
 		t.Error("the full text should survive as the body")
+	}
+}
+
+// A memory is the highest-intent record bd produces: someone decided one
+// sentence should outlive the session and wrote it down for no other purpose.
+func TestMemoriesAreMined(t *testing.T) {
+	got := memoryRecordsIn(`bd remember "the session pooler is required: LISTEN/NOTIFY does not survive transaction mode. Verified against the real driver."`)
+	if len(got) != 1 {
+		t.Fatalf("found %d memories, want 1", len(got))
+	}
+	if got[0].Kind != KindMemory {
+		t.Errorf("kind = %q, want %q", got[0].Kind, KindMemory)
+	}
+	if !strings.HasPrefix(got[0].Subject, "the session pooler is required") {
+		t.Errorf("subject = %q", got[0].Subject)
+	}
+	if !strings.Contains(got[0].Body, "Verified against the real driver") {
+		t.Errorf("body = %q, want the rest of the memory kept", got[0].Body)
+	}
+}
+
+// A memory says how something is, not what was chosen, and it has no diff
+// behind it. Typing it as a decision would credit it with a deliberation that
+// never happened.
+func TestMemoriesAreDiscoveriesNotDecisions(t *testing.T) {
+	r := Record{Kind: KindMemory, Subject: "auth uses JWT not sessions"}
+	if got := recordType(r); got != pile.Discovery {
+		t.Errorf("type = %q, want discovery", got)
+	}
+	if got := confidence(r); got >= confidence(Record{Kind: KindCommit, Body: "why"}) {
+		t.Errorf("memory confidence %v should sit below a recorded change", got)
+	}
+}
+
+func TestMemoriesWithKeysAndQuotesAreMined(t *testing.T) {
+	got := memoryRecordsIn(`bd remember 'always run tests with -race' --key race-flag && echo done`)
+	if len(got) != 1 || got[0].Subject != "always run tests with -race" {
+		t.Fatalf("got %+v, want the single-quoted memory", got)
+	}
+}
+
+// Only bd remember is a memory. Neither prose about remembering nor another
+// tool's subcommand should reach the pile.
+func TestNonMemoriesAreLeftAlone(t *testing.T) {
+	for _, cmd := range []string{
+		`echo "remember to run the tests"`,
+		`git commit -m "remember why this is here"`,
+		`other remember "not bd"`,
+	} {
+		if got := memoryRecordsIn(cmd); len(got) != 0 {
+			t.Errorf("%q produced %+v, want nothing", cmd, got)
+		}
 	}
 }

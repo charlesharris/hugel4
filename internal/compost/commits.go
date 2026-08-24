@@ -14,7 +14,7 @@ import (
 // reporting rather than inferring, which is why the first one can be a set of
 // regexes instead of a model.
 type Record struct {
-	Kind    string `json:"kind"` // commit, bead-closed, bead-decision
+	Kind    string `json:"kind"` // commit, bead-closed, bead-decision, memory
 	Subject string `json:"subject"`
 	Body    string `json:"body,omitempty"`
 	Bead    string `json:"bead,omitempty"`
@@ -25,6 +25,7 @@ const (
 	KindCommit       = "commit"
 	KindBeadClosed   = "bead-closed"
 	KindBeadDecision = "bead-decision"
+	KindMemory       = "memory"
 )
 
 var (
