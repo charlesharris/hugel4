@@ -65,8 +65,6 @@ dropped. Prompts and agent notes are taken from both ends of the session —
 intent lives at the start and outcome at the end, while the middle is the work
 itself, which the file and command records already describe.
 
-Stage two, extraction into typed pile entries, is not built yet.
-
 ## `hugel compost`
 
 Stage two: turn distilled sessions into pile entries.
@@ -153,6 +151,31 @@ down-weighted; knowledge someone threw away should not surface at all.
 One entry cannot spend the whole budget. Soil is a survey of what the pile
 knows; reading an entry in full is a second, deliberate step.
 
+## The soil skill
+
+Nothing draws soil unless something asks for it, and the cheapest thing that
+can ask is the agent itself.
+
+```
+make install        hugel4 on PATH, and the skill into ~/.claude/skills
+```
+
+The skill is the pull path: an agent decides it needs prior knowledge, draws a
+budgeted survey, and reads in full only what earns it. That is deliberately not
+a SessionStart hook. A preamble enters at turn zero and is re-sent on every
+later turn whether or not it was ever relevant — the exact waste `hugel yield`
+exists to name. A skill costs its name and description until it fires, and what
+it draws enters mid-session, where fewer turns remain to re-pay it.
+
+The cost of pull is that it only fires when the agent recognises the moment.
+That miss rate is real, and it is measurable, which is why it is the first thing
+tried rather than the fallback. If it proves too lossy, the push version hooks
+`UserPromptSubmit`, not `SessionStart` — the prompt is the query, and at session
+start there is nothing to ask about yet.
+
+It installs as `hugel4`. An earlier generation still owns `hugel` on PATH and is
+wired into live hooks; it keeps the name until it retires.
+
 ## `hugel bed`
 
 ```
@@ -190,12 +213,14 @@ internal/transcript/  harness session logs -> requests and usage
 internal/pricing/     usage -> dollars
 internal/yield/       accounting and roll-ups
 internal/cli/         thin command drivers, no domain logic
+skills/hugel-soil/    the agent-facing way to draw soil
 ```
 
 ## Development
 
 ```
 make build test vet
+make install
 ```
 
 Go module is `github.com/charris/hugel`. Dependencies: none, so far.
