@@ -201,6 +201,7 @@ repository.
 hugel pile review <id> --accept        vouch for it; soil ranks it higher
 hugel pile review <id> --reject        it is wrong; keep it out of soil
 hugel pile review <id> --abandon       what it describes is dead
+hugel pile review <id> --unreview      take back a verdict
 hugel pile review <id> --superseded-by <id>
 ```
 
@@ -210,6 +211,11 @@ walks the 247 unreviewed entries, because working a queue that size costs more
 than the pile saves — the first thing this garden refuses to build. The entries
 soil actually surfaced are the only ones whose quality has cost anything, and
 you are holding the context to judge them exactly then.
+
+A verdict can be taken back. `--unreview` returns an entry to unreviewed rather
+than to the opposite verdict — not knowing is a real state, and pretending
+otherwise is how a wrong keystroke becomes a fact. The TUI's `u` does the same
+thing.
 
 Status and review answer different questions. `--reject` says the entry is
 wrong; `--abandon` says the approach it faithfully records is dead. Both drop

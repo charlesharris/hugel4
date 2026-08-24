@@ -299,6 +299,7 @@ usage:
   hugel pile review <id>... --accept        vouch for it; soil ranks it higher
   hugel pile review <id>... --reject        it is wrong; drop it from soil
   hugel pile review <id>... --abandon       what it describes is dead
+  hugel pile review <id>... --unreview      take back a verdict
   hugel pile review <id> --superseded-by <id>
 
 Ids come from a draw. Review what soil actually surfaced rather than working
@@ -313,6 +314,7 @@ flags:
 		accept  = fs.Bool("accept", false, "a human vouches for this entry")
 		reject  = fs.Bool("reject", false, "this entry is wrong; keep it out of soil")
 		abandon = fs.Bool("abandon", false, "what this entry describes was abandoned")
+		unsay   = fs.Bool("unreview", false, "take back a verdict; return it to unreviewed")
 		by      = fs.String("superseded-by", "", "id of the entry that replaced this one")
 		why     = fs.String("why", "", "the reason, recorded in the pile's git log")
 	)
@@ -328,7 +330,7 @@ flags:
 	var chosen []string
 	for name, on := range map[string]bool{
 		"--accept": *accept, "--reject": *reject,
-		"--abandon": *abandon, "--superseded-by": *by != "",
+		"--abandon": *abandon, "--unreview": *unsay, "--superseded-by": *by != "",
 	} {
 		if on {
 			chosen = append(chosen, name)
@@ -371,6 +373,8 @@ flags:
 		verb, label = "Reject", "rejected"
 	case *abandon:
 		verb, label = "Abandon", "abandoned"
+	case *unsay:
+		verb, label = "Unreview", "unreviewed"
 	}
 
 	var titles []string
@@ -387,6 +391,12 @@ flags:
 			e, res, err = store.SetReview(id, pile.Rejected)
 		case *abandon:
 			e, res, err = store.SetStatus(id, pile.Abandoned)
+		case *unsay:
+			// A verdict is a human's, so taking one back is too. It returns the
+			// entry to unreviewed rather than to the opposite verdict: not
+			// knowing is a real state, and pretending otherwise is how a wrong
+			// keystroke becomes a fact.
+			e, res, err = store.SetReview(id, pile.Unreviewed)
 		}
 		if err != nil {
 			return err
