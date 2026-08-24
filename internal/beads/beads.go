@@ -199,3 +199,11 @@ func Survey(dirs map[string]string) ([]*Work, []error) {
 	})
 	return out, problems
 }
+
+// Claim marks a bead as being worked, through bd rather than in a status hugel
+// keeps for itself. The queue a tender pulls from has to stay the queue every
+// other reader sees, which is the whole reason hugel does not track work.
+func Claim(dir, id string) error {
+	_, err := run(dir, "update", id, "--claim")
+	return err
+}

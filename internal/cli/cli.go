@@ -23,6 +23,7 @@ usage:
   hugel bed <cmd>         the projects the garden knows
   hugel garden            where the work is, across every bed
   hugel tend              judge what the garden did
+  hugel tender <bead>     work one bead, unattended, in tmux
   hugel hooks <name>      what the harness runs on hugel's behalf
 
 run "hugel <command> -h" for flags.
@@ -51,6 +52,8 @@ func Run(args []string) error {
 		return runGarden(args[1:])
 	case "tend":
 		return runTend(args[1:])
+	case "tender":
+		return runTender(args[1:])
 	case "hooks":
 		return runHooks(args[1:])
 	case "-h", "--help", "help":

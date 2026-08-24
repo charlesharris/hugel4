@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Nine commands work.
+Earliest days. Ten commands work.
 
 ## `hugel yield`
 
@@ -177,6 +177,44 @@ in place, because "the pile was never asked" is a finding, not a blank.
 Each group caps at `--limit` and says what it left out. A bulk import or a first
 compost run drops hundreds of entries inside any window, and a truncated list
 that looks complete is worse than a long one.
+
+## `hugel tender`
+
+Work one bead, unattended.
+
+```
+hugel tender <bead>          start a tender on a ready bead
+hugel tender --list          what is being tended, and how it went
+hugel tender --show <bead>   the brief, and the result if there is one
+hugel tender --stop <bead>   end it; keeps the worktree to look at
+```
+
+**Unattended, not headless.** The agent runs as an ordinary interactive session
+inside a detached tmux session, which is what keeps the work on a subscription
+rather than metered API billing.
+
+**Nothing types into its pane.** The tender is briefed by a file it is told to
+read, and answers by writing a file back. Keystroke injection races with
+whatever the agent is doing and leaves nothing to read afterwards; a brief and a
+result are both durable and both reviewable. Writing the result file is how the
+garden learns a tender has finished — no polling of the pane, no parsing of
+scrollback.
+
+Each tender gets a git worktree and a branch of its own, so a run that goes
+wrong is thrown away by deleting a directory. The worktree is named for the
+**bed**, not the bead: a harness names a session's project by the basename of
+its working directory, so a worktree named for the bead would file the whole
+transcript under a bed that is not the project — one new bed per bead, and the
+accounting scattered across all of them.
+
+The brief says what not to do as clearly as what to do. A tender commits to its
+own branch and stops: pushing, merging and closing the bead are a reviewer's
+decisions. Claiming goes through bd rather than into a status hugel keeps, so
+the queue a tender pulls from stays the queue everything else reads.
+
+By default the agent runs with permission prompts bypassed, because a tender
+nobody is watching that stops to ask has not done the work — it has parked in a
+pane. `--ask-permission` turns that off, with the obvious consequence.
 
 ## `hugel hooks`
 
@@ -387,6 +425,7 @@ internal/yield/       accounting and roll-ups
 internal/draws/       what the pile was asked, and what it handed over
 internal/tend/        the working surface
 internal/beads/       reading work from bd
+internal/tender/      working one bead, unattended, in tmux
 internal/cli/         thin command drivers, no domain logic
 skills/hugel-soil/    the agent-facing way to draw soil
 ```
