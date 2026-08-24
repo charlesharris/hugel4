@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "hugel4",
+  "project_id": "e360b5af-f30e-4946-b56b-a9c12ec5b324"
+}
