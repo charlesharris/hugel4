@@ -86,18 +86,18 @@ func TestCursorSkipsHeadings(t *testing.T) {
 	es := []*pile.Entry{ent("a", "drawn one", -60, "s1"), ent("b", "fresh one", -60, "s1")}
 	m, _ := surface(t, es, []draws.Draw{drew(-30, "a")})
 
-	if m.rows[m.cursor].Kind == Heading {
+	if m.rows()[m.cursor].Kind == Heading {
 		t.Fatal("cursor started on a heading")
 	}
 	for i := 0; i < 10; i++ {
 		m = press(m, "j")
-		if m.rows[m.cursor].Kind == Heading {
+		if m.rows()[m.cursor].Kind == Heading {
 			t.Fatalf("cursor landed on a heading after %d moves down", i+1)
 		}
 	}
 	for i := 0; i < 10; i++ {
 		m = press(m, "k")
-		if m.rows[m.cursor].Kind == Heading {
+		if m.rows()[m.cursor].Kind == Heading {
 			t.Fatalf("cursor landed on a heading after %d moves up", i+1)
 		}
 	}

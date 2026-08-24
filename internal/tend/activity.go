@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/beads"
 	"github.com/charris/hugel/internal/draws"
 	"github.com/charris/hugel/internal/pile"
 	"github.com/charris/hugel/internal/yield"
@@ -39,13 +40,18 @@ const (
 	Drawn
 	// Composted is an entry composted in the window.
 	Composted
+	// Work is a bead: something to be done rather than something learned.
+	Work
 )
 
-// Row is one line of the list.
+// Row is one line of a list. Exactly one of Entry and Bead is set on a
+// selectable row; a Heading has neither.
 type Row struct {
 	Kind  Kind
 	Label string
 	Entry *pile.Entry
+	Bead  *beads.Bead
+	Bed   string // which bed a work row belongs to
 }
 
 // Gather assembles the surface. It does no IO, so what is shown can be tested
@@ -166,6 +172,9 @@ func Unjudged(rows []Row) int {
 	n := 0
 	for _, r := range rows {
 		if r.Kind == Heading {
+			continue
+		}
+		if r.Entry == nil {
 			continue
 		}
 		if r.Entry.Review == pile.Unreviewed && r.Entry.Status == pile.Active {

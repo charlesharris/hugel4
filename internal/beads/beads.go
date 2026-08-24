@@ -26,6 +26,7 @@ var ErrNoBd = errors.New("bd is not installed")
 type Bead struct {
 	ID       string    `json:"id"`
 	Title    string    `json:"title"`
+	Body     string    `json:"description,omitempty"`
 	Type     string    `json:"issue_type"`
 	Status   string    `json:"status"`
 	Priority int       `json:"priority"`

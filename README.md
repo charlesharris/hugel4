@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Eight commands work.
+Earliest days. Nine commands work.
 
 ## `hugel yield`
 
@@ -118,6 +118,32 @@ including dense project-specific notes whose only crime was arguing a decision
 without citing a filename. Absence of evidence of bed-specificity is not
 evidence of generality — and guessing wrong in that direction sends an entry
 into every other bed's soil, which is what scope exists to prevent.
+
+## `hugel garden`
+
+Where the work is, across every bed.
+
+```
+hugel garden [--since 7d] [--limit 12]
+```
+
+The entry point. What is in flight, what is ready to start, what cannot move —
+every bed at once, not just the one you are standing in. Tab switches to the
+knowledge that came back from the last flight.
+
+Work and knowledge are two panes of one surface rather than two programs,
+because they are two halves of one sitting: you look at what is in flight, and
+you judge what the last flight left behind. Each pane keeps its place, so a
+glance at one does not cost your position in the other.
+
+Within a bed the order is the question actually being asked — what is
+half-finished and waiting on you, what could be started, what cannot move. Each
+bed caps at `--limit` and says what it left out, so one bed with thirty ready
+beads cannot bury the rest.
+
+Work is read from bd and never written here. Starting, claiming and closing a
+bead are bd's business; a verdict is the pile's. Pressing a judgement key on a
+bead does nothing on purpose.
 
 ## `hugel tend`
 
