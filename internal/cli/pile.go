@@ -24,6 +24,8 @@ func runPile(args []string) error {
 		return runPileList(args[1:])
 	case "show":
 		return runPileShow(args[1:])
+	case "review":
+		return runPileReview(args[1:])
 	case "-h", "--help", "help":
 		return pileUsage()
 	default:
@@ -40,6 +42,7 @@ usage:
   hugel pile import <dir>          take in legacy markdown entries
   hugel pile list [--bed B]        what the pile knows
   hugel pile show <id>             one entry in full
+  hugel pile review <id>...        record what you decided about an entry
 
 The pile lives at ~/.hugel/pile unless HUGEL_PILE says otherwise.
 `)
@@ -242,21 +245,9 @@ func runPileShow(args []string) error {
 	if err != nil {
 		return err
 	}
-	all, err := s.All()
+	match, err := s.Get(fs.Arg(0))
 	if err != nil {
 		return err
-	}
-	var match *pile.Entry
-	for _, e := range all {
-		if strings.HasPrefix(e.ID, fs.Arg(0)) {
-			if match != nil {
-				return fmt.Errorf("id prefix %q is ambiguous", fs.Arg(0))
-			}
-			match = e
-		}
-	}
-	if match == nil {
-		return fmt.Errorf("no entry matching %q", fs.Arg(0))
 	}
 	fmt.Printf("%s  %s  %s\n", match.ID, match.Type, match.Scope)
 	fmt.Printf("%s\n\n", match.Title)
@@ -268,6 +259,9 @@ func runPileShow(args []string) error {
 	}
 	if len(match.Paths) > 0 {
 		fmt.Printf("paths      %s\n", strings.Join(match.Paths, ", "))
+	}
+	for _, l := range match.Links {
+		fmt.Printf("%-10s %s\n", l.Rel, l.ID)
 	}
 	fmt.Printf("source     %s", match.Source.Extractor)
 	if match.Source.ImportedFrom != "" {
@@ -286,4 +280,140 @@ func sourceLabel(path string) string {
 		return filepath.Join(p, base)
 	}
 	return base
+}
+
+// runPileReview records a human's standing on entries.
+//
+// There is deliberately no inbox here — no "hugel pile review" that walks 247
+// unreviewed entries. Working a queue that size costs more than the pile saves,
+// which is the first thing this garden refuses to build. Review is driven by
+// what a draw surfaced: the handful of entries that actually reached a session
+// are the only ones whose quality has cost anything yet, and you are holding the
+// context to judge them exactly then.
+func runPileReview(args []string) error {
+	fs := flag.NewFlagSet("pile review", flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprint(os.Stderr, `hugel pile review — record what you decided about an entry
+
+usage:
+  hugel pile review <id>... --accept        vouch for it; soil ranks it higher
+  hugel pile review <id>... --reject        it is wrong; drop it from soil
+  hugel pile review <id>... --abandon       what it describes is dead
+  hugel pile review <id> --superseded-by <id>
+
+Ids come from a draw. Review what soil actually surfaced rather than working
+through the pile: those are the entries whose quality has cost you anything.
+
+flags:
+`)
+		fs.PrintDefaults()
+	}
+	var (
+		root    = fs.String("pile", "", "pile location (default ~/.hugel/pile)")
+		accept  = fs.Bool("accept", false, "a human vouches for this entry")
+		reject  = fs.Bool("reject", false, "this entry is wrong; keep it out of soil")
+		abandon = fs.Bool("abandon", false, "what this entry describes was abandoned")
+		by      = fs.String("superseded-by", "", "id of the entry that replaced this one")
+		why     = fs.String("why", "", "the reason, recorded in the pile's git log")
+	)
+	ids, err := parseInterleaved(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		fs.Usage()
+		return fmt.Errorf("need at least one entry id")
+	}
+
+	var chosen []string
+	for name, on := range map[string]bool{
+		"--accept": *accept, "--reject": *reject,
+		"--abandon": *abandon, "--superseded-by": *by != "",
+	} {
+		if on {
+			chosen = append(chosen, name)
+		}
+	}
+	sort.Strings(chosen)
+	if len(chosen) != 1 {
+		fs.Usage()
+		if len(chosen) == 0 {
+			return fmt.Errorf("say what you decided")
+		}
+		return fmt.Errorf("%s: pick one", strings.Join(chosen, " and "))
+	}
+
+	dir, err := pileRoot(*root)
+	if err != nil {
+		return err
+	}
+	store, err := pile.Open(dir)
+	if err != nil {
+		return err
+	}
+
+	if *by != "" {
+		if len(ids) != 1 {
+			return fmt.Errorf("supersede one entry at a time")
+		}
+		old, newer, err := store.Supersede(ids[0], *by)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("superseded  %s  %s\n", old.ID, truncate(old.Title, 60))
+		fmt.Printf("         by  %s  %s\n", newer.ID, truncate(newer.Title, 60))
+		return store.Commit(commitMessage("Supersede", []string{old.Title}, *why))
+	}
+
+	verb, label := "Accept", "accepted"
+	switch {
+	case *reject:
+		verb, label = "Reject", "rejected"
+	case *abandon:
+		verb, label = "Abandon", "abandoned"
+	}
+
+	var titles []string
+	for _, id := range ids {
+		var (
+			e   *pile.Entry
+			res pile.Result
+			err error
+		)
+		switch {
+		case *accept:
+			e, res, err = store.SetReview(id, pile.Accepted)
+		case *reject:
+			e, res, err = store.SetReview(id, pile.Rejected)
+		case *abandon:
+			e, res, err = store.SetStatus(id, pile.Abandoned)
+		}
+		if err != nil {
+			return err
+		}
+		if res == pile.Unchanged {
+			fmt.Printf("already %-10s %s  %s\n", label, e.ID, truncate(e.Title, 60))
+			continue
+		}
+		fmt.Printf("%-18s %s  %s\n", label, e.ID, truncate(e.Title, 60))
+		titles = append(titles, e.Title)
+	}
+	if len(titles) == 0 {
+		return nil // nothing changed, so nothing to commit
+	}
+	return store.Commit(commitMessage(verb, titles, *why))
+}
+
+// commitMessage puts the reason in the log rather than in the entry. The pile's
+// git history is already its temporal layer, so why an entry was thrown out
+// costs nothing to keep there and would cost a schema field anywhere else.
+func commitMessage(verb string, titles []string, why string) string {
+	subject := fmt.Sprintf("%s %d entries", verb, len(titles))
+	if len(titles) == 1 {
+		subject = fmt.Sprintf("%s %q", verb, truncate(titles[0], 60))
+	}
+	if why == "" {
+		return subject
+	}
+	return subject + "\n\n" + why
 }

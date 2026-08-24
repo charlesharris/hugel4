@@ -118,6 +118,32 @@ Nothing that changes when an entry is merely *read* belongs in these files.
 Usage counts live in the derived index, or every soil lookup would dirty the
 repository.
 
+```
+hugel pile review <id> --accept        vouch for it; soil ranks it higher
+hugel pile review <id> --reject        it is wrong; keep it out of soil
+hugel pile review <id> --abandon       what it describes is dead
+hugel pile review <id> --superseded-by <id>
+```
+
+Review is what turns an automated pile into trusted knowledge, and it is
+deliberately **driven by draws, not by an inbox**. There is no command that
+walks the 247 unreviewed entries, because working a queue that size costs more
+than the pile saves — the first thing this garden refuses to build. The entries
+soil actually surfaced are the only ones whose quality has cost anything, and
+you are holding the context to judge them exactly then.
+
+Status and review answer different questions. `--reject` says the entry is
+wrong; `--abandon` says the approach it faithfully records is dead. Both drop
+out of soil, and only one is a complaint about the entry.
+
+Superseding sinks the old entry rather than deleting it — it was true once, and
+why it stopped being true is worth reaching. The link is written on the newer
+entry, pointing back, because that is the direction a reader travels.
+
+The reason goes in the commit message, not in the entry. The pile's git history
+is already its temporal layer, so why something was thrown out costs nothing to
+keep there and would cost a schema field anywhere else.
+
 Writes converge rather than duplicate. An entry's identity is its scope, type
 and normalised title, so re-composting a session updates in place; an entry
 whose content is unchanged is not rewritten at all, so a compost run that
