@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Six commands work.
+Earliest days. Eight commands work.
 
 ## `hugel yield`
 
@@ -110,6 +110,34 @@ including dense project-specific notes whose only crime was arguing a decision
 without citing a filename. Absence of evidence of bed-specificity is not
 evidence of generality — and guessing wrong in that direction sends an entry
 into every other bed's soil, which is what scope exists to prevent.
+
+## `hugel tend`
+
+The working surface: what the garden did lately, and the judgement you pass on
+it.
+
+```
+hugel tend [--since 7d] [--bed NAME] [--limit 25]
+```
+
+Left is what happened, right is the entry in full. You judge without navigating
+away — `a` keeps, `r` throws out, `x` abandons, `u` undoes a mis-key, and `s`
+twice supersedes: once on the stale entry, once on the one that replaced it, so
+nothing has to be typed. A sitting is one act of gardening and commits as one.
+
+**Bounded by time, never by backlog.** There is no view of every unreviewed
+entry, for the same reason `hugel pile review` has no inbox: a queue of hundreds
+is not judged, it is abandoned. Sit down after three days away and you are shown
+three days.
+
+Two groups, and the order is the argument. **Delivered** entries were drawn into
+a session and so have cost tokens rather than disk; they are judged first.
+**New** entries were composted in the window. An empty Delivered group is left
+in place, because "the pile was never asked" is a finding, not a blank.
+
+Each group caps at `--limit` and says what it left out. A bulk import or a first
+compost run drops hundreds of entries inside any window, and a truncated list
+that looks complete is worse than a long one.
 
 ## `hugel hooks`
 
@@ -282,6 +310,7 @@ internal/transcript/  harness session logs -> requests and usage
 internal/pricing/     usage -> dollars
 internal/yield/       accounting and roll-ups
 internal/draws/       what the pile was asked, and what it handed over
+internal/tend/        the working surface
 internal/cli/         thin command drivers, no domain logic
 skills/hugel-soil/    the agent-facing way to draw soil
 ```
@@ -293,4 +322,6 @@ make build test vet
 make install
 ```
 
-Go module is `github.com/charris/hugel`. Dependencies: none, so far.
+Go module is `github.com/charris/hugel`. Dependencies: Bubbletea and lipgloss,
+for `hugel tend`, and nothing else. Everything that is not the terminal surface
+still stands on the standard library.
