@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/draws"
+	"github.com/charris/hugel/internal/pile"
 	"github.com/charris/hugel/internal/transcript"
 	"github.com/charris/hugel/internal/yield"
 )
@@ -21,6 +23,7 @@ usage:
   hugel yield [--since 30d] [--bed NAME]     spend rolled up by bed
   hugel yield --sessions                     one line per session, dearest first
   hugel yield --session ID                   request-by-request, to find a spiral
+  hugel yield --soil                         whether the pile is asked, and whether it was right
 
 flags:
 `)
@@ -33,6 +36,7 @@ flags:
 		sessions = fs.Bool("sessions", false, "list sessions instead of beds")
 		session  = fs.String("session", "", "show one session in detail (id prefix is enough)")
 		limit    = fs.Int("limit", 20, "rows to show in list views")
+		soilRep  = fs.Bool("soil", false, "report draws from the pile rather than spend")
 		asJSON   = fs.Bool("json", false, "emit JSON")
 		root     = fs.String("root", "", "transcript root (default ~/.claude/projects)")
 	)
@@ -74,6 +78,10 @@ flags:
 			f.Since = time.Now().Add(-d)
 		}
 	}
+	if *soilRep {
+		return showSoil(all_, f, *asJSON)
+	}
+
 	rep := yield.Build(all_, f)
 	if len(rep.Entries) == 0 {
 		fmt.Println("no sessions in that window")
@@ -237,4 +245,72 @@ func ordinal(n int) string {
 		return "rd"
 	}
 	return "th"
+}
+
+// showSoil reports what the pile was asked for and what came of it.
+//
+// The two numbers are reach and precision, and both are built to be able to
+// come out badly. Reach is the miss rate of pull delivery stated forwards: a
+// skill fires only when the agent recognises the moment, and if that number
+// stays near zero the argument for pull was wrong. Precision counts only
+// entries a human has ruled on, so it cannot be flattered by leaving the pile
+// unreviewed.
+func showSoil(sessions []*transcript.Session, f yield.Filter, asJSON bool) error {
+	log, err := draws.Load()
+	if err != nil {
+		return err
+	}
+	dir, err := pile.DefaultRoot()
+	if err != nil {
+		return err
+	}
+	var entries []*pile.Entry
+	if store, err := pile.Open(dir); err == nil {
+		if entries, err = store.All(); err != nil {
+			return err
+		}
+	}
+
+	rep := yield.Soil(sessions, log, entries, f)
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+
+	if rep.Draws == 0 {
+		fmt.Printf("the pile was not asked anything in %d sessions\n", rep.Sessions)
+		fmt.Println("\nnothing has been drawn yet, so there is nothing to judge.")
+		return nil
+	}
+
+	fmt.Printf("%-20s %5s %6s %8s %9s  %s\n", "BED", "SESS", "DRAWS", "REACHED", "TOKENS", "REACH")
+	fmt.Println(strings.Repeat("─", 72))
+	for _, b := range rep.Beds {
+		reach := 0.0
+		if b.Sessions > 0 {
+			reach = float64(b.Reached) / float64(b.Sessions)
+		}
+		fmt.Printf("%-20s %5d %6d %8d %9s  %5.0f%% %s\n",
+			truncate(b.Name, 20), b.Sessions, b.Draws, b.Reached, tokens(b.Tokens),
+			reach*100, bar(reach, 10))
+	}
+	fmt.Println(strings.Repeat("─", 72))
+	fmt.Printf("%-20s %5d %6d %8d %9s  %5.0f%% %s\n",
+		"TOTAL", rep.Sessions, rep.Draws, rep.Reached, tokens(rep.Tokens),
+		rep.Reach()*100, bar(rep.Reach(), 10))
+
+	fmt.Printf("\n  reached    %d of %d sessions asked the pile anything\n", rep.Reached, rep.Sessions)
+	fmt.Printf("  delivered  %d entries over %d draws, %d of them distinct\n",
+		rep.Delivered, rep.Draws, rep.Distinct)
+	if rep.Judged() == 0 {
+		fmt.Printf("  judged     none of the %d yet — precision is unknown, not good\n", rep.Distinct)
+		return nil
+	}
+	fmt.Printf("  judged     %d of %d: %d kept, %d thrown out  (%.0f%% precision)\n",
+		rep.Judged(), rep.Distinct, rep.Accepted, rep.Rejected, rep.Precision()*100)
+	if rep.Missing > 0 {
+		fmt.Printf("  gone       %d drawn entries are no longer in the pile\n", rep.Missing)
+	}
+	return nil
 }

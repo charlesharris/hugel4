@@ -29,6 +29,7 @@ hugel yield                    spend rolled up by bed (last 30d)
 hugel yield --all              no time limit
 hugel yield --sessions         one line per session, dearest first
 hugel yield --session ID       request-by-request, to find a spiral
+hugel yield --soil             whether the pile is asked, and whether it was right
 ```
 
 It reads Claude Code's session transcripts from `~/.claude/projects` and writes
@@ -44,6 +45,23 @@ not it is ever used; a subagent that forages in its own context and returns a
 summary pays it on almost nothing.
 
 Context tax above ~85% means the session is mostly paying to remember itself.
+
+### Whether any of this works
+
+`hugel yield --soil` reports the two numbers soil and its skill shipped without.
+
+**Reach** is the share of sessions that asked the pile anything. Pull delivery
+fires only when an agent recognises the moment, and that miss rate was the
+stated cost of choosing a skill over a hook. If reach stays near zero, the
+choice was wrong and the push version is the answer.
+
+**Precision** is the share of delivered entries a human later kept. It counts
+only entries someone has actually ruled on, so it cannot be flattered by
+leaving the pile unreviewed — an unjudged entry is unknown, not good. It is
+also the zero a model-backed extractor will have to beat.
+
+Draws are recorded to `~/.hugel/draws.jsonl`, beside the pile rather than in it:
+nothing that changes when an entry is merely read belongs in the pile's files.
 
 ## `hugel digest`
 
@@ -92,6 +110,31 @@ including dense project-specific notes whose only crime was arguing a decision
 without citing a filename. Absence of evidence of bed-specificity is not
 evidence of generality — and guessing wrong in that direction sends an entry
 into every other bed's soil, which is what scope exists to prevent.
+
+## `hugel hooks`
+
+```
+hugel hooks session-start      compost what has changed, before work begins
+```
+
+Composting runs on the way in, not the way out. The moment pile freshness is
+worth anything is immediately before a draw, so collecting at the start of a
+session means soil pulled during it already holds the last session's lessons.
+It is self-healing too: a session that ends in a crash or a reboot is collected
+by the next start, where an end-of-session hook would lose it silently.
+
+Only transcripts written since the last run are parsed, because parsing is the
+entire cost of composting. A full pass over 21 sessions takes ~1s; the steady
+state is ~19ms, and stays there as sessions accumulate.
+
+The hook writes nothing to stdout and always exits zero. A SessionStart hook's
+output is prepended to the session's context and re-read on every turn, which
+is the waste `hugel yield` exists to name; and a hook that can refuse to let
+work begin is a worse problem than a stale pile.
+
+Push is right here and wrong for delivery, which is worth saying plainly rather
+than sliding past: composting writes to disk and costs a session nothing, while
+soil enters a live context window and is paid for on every later turn.
 
 ## `hugel pile`
 
@@ -238,6 +281,7 @@ cmd/hugel/            entrypoint
 internal/transcript/  harness session logs -> requests and usage
 internal/pricing/     usage -> dollars
 internal/yield/       accounting and roll-ups
+internal/draws/       what the pile was asked, and what it handed over
 internal/cli/         thin command drivers, no domain logic
 skills/hugel-soil/    the agent-facing way to draw soil
 ```

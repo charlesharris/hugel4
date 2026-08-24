@@ -20,6 +20,7 @@ usage:
   hugel pile <cmd>        the knowledge store
   hugel soil <query>      draw context from the pile
   hugel bed <cmd>         the projects the garden knows
+  hugel hooks <name>      what the harness runs on hugel's behalf
 
 run "hugel <command> -h" for flags.
 `
@@ -43,6 +44,8 @@ func Run(args []string) error {
 		return runSoil(args[1:])
 	case "bed":
 		return runBed(args[1:])
+	case "hooks":
+		return runHooks(args[1:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return nil

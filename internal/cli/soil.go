@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/charris/hugel/internal/config"
+	"github.com/charris/hugel/internal/draws"
 	"github.com/charris/hugel/internal/pile"
+	"github.com/charris/hugel/internal/redact"
 	"github.com/charris/hugel/internal/soil"
 )
 
@@ -58,6 +60,7 @@ flags:
 		Text: strings.Join(words, " "), Bed: *bed, Kin: cfg.KinOf(*bed),
 		Type: pile.Type(*kind), Limit: *limit, Budget: *budget,
 	})
+	recordDraw(s, *budget)
 	if *asJSON {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -65,6 +68,28 @@ flags:
 	}
 	fmt.Print(s.Render())
 	return nil
+}
+
+// recordDraw notes what the pile handed over, so that whether an agent reaches
+// for it — and whether what it got was worth keeping — become countable rather
+// than asserted.
+//
+// A failed write must never cost the caller its soil: this runs inside live
+// sessions, and an instrument that can break the thing it measures is worse
+// than no instrument.
+func recordDraw(s *soil.Soil, budget int) {
+	ids := make([]string, 0, len(s.Items))
+	for _, it := range s.Items {
+		ids = append(ids, it.ID)
+	}
+	query, _ := redact.FromEnv().Redact(s.Query)
+	err := draws.Append(draws.Draw{
+		At: time.Now().UTC(), Bed: s.Bed, Query: query, Budget: budget,
+		Tokens: s.Tokens, Considered: s.Considered, Entries: ids,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: draw not recorded: %v\n", err)
+	}
 }
 
 // openIndex builds a searchable view of the pile. It is rebuilt per invocation
