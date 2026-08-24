@@ -125,6 +125,11 @@ away — `a` keeps, `r` throws out, `x` abandons, `u` undoes a mis-key, and `s`
 twice supersedes: once on the stale entry, once on the one that replaced it, so
 nothing has to be typed. A sitting is one act of gardening and commits as one.
 
+Entries from the project you are standing in are listed first, under every name
+that project has had. Nothing is hidden — the pile is shared and another bed's
+entries still need a verdict — but with a cap on each group, what is listed
+first is what actually gets judged.
+
 **Bounded by time, never by backlog.** There is no view of every unreviewed
 entry, for the same reason `hugel pile review` has no inbox: a queue of hundreds
 is not judged, it is abandoned. Sit down after three days away and you are shown
@@ -176,7 +181,10 @@ hugel pile list [--stats]    what the pile knows
 hugel pile show <id>         one entry in full
 ```
 
-Lives at `~/.hugel/pile` unless `HUGEL_PILE` says otherwise. **The files are the
+Lives in the garden, at `~/.hugel/pile`, unless `HUGEL_PILE` says otherwise.
+The pile hangs off the garden rather than off your home directory, so
+`HUGEL_HOME` moves the whole garden together — config, draw log, marks and
+entries. **The files are the
 source of truth.** Any index built over them is derived and disposable,
 rebuildable by re-reading the directory. An earlier Hugel made a graph database
 authoritative, which meant the knowledge died with a container volume.
@@ -225,7 +233,7 @@ learned nothing leaves no diff.
 Draw context from the pile.
 
 ```
-hugel soil "what the work is about" --bed NAME [--budget 1500]
+hugel soil "what the work is about" [--bed NAME] [--budget 1500]
 ```
 
 Soil is not the pile — it is the small, selected part of it delivered to one
@@ -237,6 +245,13 @@ for the session, and is re-read on every turn.
 Retrieval is BM25, local, no embeddings and no service. At this size a good
 ranking function beats a vector database, and the pile has to prove it deserves
 one before it gets one.
+
+The bed defaults to the working directory's name, which is how beds are named
+everywhere else: a bed is the basename of the directory a session ran in. It is
+a default where a bed *weights* — soil's ranking, tend's ordering — and
+deliberately not where a bed *filters*, since defaulting a filter to the working
+directory lets a command run from the wrong place hide everything rather than
+show nothing.
 
 Relevance alone is the wrong ranking for a shared pile — another project's entry
 can match the words perfectly and still be the wrong knowledge. So lexical score

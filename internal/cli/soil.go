@@ -32,7 +32,7 @@ flags:
 		fs.PrintDefaults()
 	}
 	var (
-		bed     = fs.String("bed", "", "the bed the work is in (weights local knowledge)")
+		bed     = fs.String("bed", "", "the bed the work is in (default: this directory's name)")
 		kind    = fs.String("type", "", "only this kind of knowledge")
 		limit   = fs.Int("limit", 8, "most entries to return")
 		budget  = fs.Int("budget", 1500, "most tokens of soil to deliver")
@@ -46,6 +46,10 @@ flags:
 	if len(words) == 0 {
 		fs.Usage()
 		return fmt.Errorf("need something to ask the pile about")
+	}
+
+	if *bed == "" {
+		*bed = currentBed()
 	}
 
 	ix, err := openIndex(*pileDir)

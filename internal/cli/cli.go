@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -164,4 +165,20 @@ func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 		positional = append(positional, rest[0])
 		args = rest[1:]
 	}
+}
+
+// currentBed names the project the gardener is standing in.
+//
+// A bed is the basename of the directory a session ran in, which is how
+// transcripts name them, so the same rule read from the shell gives the same
+// answer. It is used where a bed *weights* -- soil's ranking, tend's ordering
+// -- and deliberately not where a bed *filters*: defaulting a filter to the
+// working directory would let a command run from the wrong place silently hide
+// everything rather than show nothing.
+func currentBed() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(wd)
 }

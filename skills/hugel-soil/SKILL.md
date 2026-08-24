@@ -12,13 +12,14 @@ piece of work. Drawing is read-only; it writes nothing.
 ## Draw
 
 ```
-hugel4 soil "what the work is about" --bed "$(basename "$PWD")"
+hugel4 soil "what the work is about"
 ```
 
-The bed is the project directory's name. It weights knowledge this project
-earned above another project's, and picks up the names this project used to go
-by. Pass it — without it every bed ranks alike, and another project's entry can
-match the words perfectly while being the wrong knowledge.
+The bed — the project — defaults to the working directory's name, which is how
+hugel names beds everywhere else. It weights knowledge this project earned above
+another project's and picks up the names this project used to go by, so another
+project's entry cannot match the words perfectly and outrank something local.
+Pass `--bed NAME` only when the work belongs to a project you are not sitting in.
 
 Ask with the substance of the work, not keywords. Ranking is lexical, so use
 words an entry would use: *"why the extractor only reads commit messages"*

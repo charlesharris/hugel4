@@ -75,7 +75,7 @@ func press(m Model, keys ...string) Model {
 func surface(t *testing.T, es []*pile.Entry, log []draws.Draw) (Model, *fakeStore) {
 	t.Helper()
 	f := newFake(es...)
-	a := Gather(es, log, yield.SoilReport{Sessions: 4, Reached: 1, Draws: len(log)}, now.Add(-24*time.Hour))
+	a := Gather(es, log, yield.SoilReport{Sessions: 4, Reached: 1, Draws: len(log)}, now.Add(-24*time.Hour), nil)
 	m := New(a, f, 25)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	return next.(Model), f

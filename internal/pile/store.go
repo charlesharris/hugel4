@@ -9,18 +9,25 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/charris/hugel/internal/config"
 )
 
 // DefaultRoot is where the pile lives unless told otherwise.
+//
+// It hangs off the garden rather than off the user's home directory, so moving
+// the garden moves the pile with it. Reaching for the home directory directly
+// meant HUGEL_HOME relocated the config, the draw log and the marks but left
+// the pile behind -- which is fine until a test writes to the real one.
 func DefaultRoot() (string, error) {
 	if r := os.Getenv("HUGEL_PILE"); r != "" {
 		return r, nil
 	}
-	home, err := os.UserHomeDir()
+	home, err := config.Home()
 	if err != nil {
-		return "", fmt.Errorf("locate home dir: %w", err)
+		return "", err
 	}
-	return filepath.Join(home, ".hugel", "pile"), nil
+	return filepath.Join(home, "pile"), nil
 }
 
 // Store is a pile on disk: a directory of JSON entries under git.

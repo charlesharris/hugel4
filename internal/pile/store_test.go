@@ -157,3 +157,27 @@ func TestInitIsSafeToRepeat(t *testing.T) {
 		t.Errorf("re-init lost entries: count = %d", n)
 	}
 }
+
+// The pile hangs off the garden, so moving the garden moves the pile. It used
+// to be built from the home directory directly, which meant a test with
+// HUGEL_HOME set still wrote to the real pile.
+func TestDefaultRootFollowsTheGarden(t *testing.T) {
+	garden := t.TempDir()
+	t.Setenv("HUGEL_HOME", garden)
+	t.Setenv("HUGEL_PILE", "")
+
+	got, err := DefaultRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(garden, "pile"); got != want {
+		t.Errorf("DefaultRoot = %q, want %q", got, want)
+	}
+
+	// An explicit pile still wins: it is the more specific instruction.
+	elsewhere := t.TempDir()
+	t.Setenv("HUGEL_PILE", elsewhere)
+	if got, _ := DefaultRoot(); got != elsewhere {
+		t.Errorf("DefaultRoot = %q, want HUGEL_PILE to win", got)
+	}
+}

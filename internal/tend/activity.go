@@ -10,6 +10,7 @@ package tend
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charris/hugel/internal/draws"
@@ -49,7 +50,19 @@ type Row struct {
 
 // Gather assembles the surface. It does no IO, so what is shown can be tested
 // without a terminal or a pile.
-func Gather(entries []*pile.Entry, log []draws.Draw, soil yield.SoilReport, since time.Time) Activity {
+//
+// home names the bed the gardener is standing in, and every earlier name for
+// the same project. It orders rather than filters: with a cap on each group,
+// what is shown first is what gets judged, and the project in front of you is
+// the one you can judge. Nothing is hidden -- another bed's entries still
+// appear below, because the pile is shared and they still need a verdict.
+func Gather(entries []*pile.Entry, log []draws.Draw, soil yield.SoilReport, since time.Time, home []string) Activity {
+	local := map[string]bool{}
+	for _, n := range home {
+		local[strings.ToLower(n)] = true
+	}
+	isLocal := func(e *pile.Entry) bool { return local[strings.ToLower(e.Bed)] }
+
 	a := Activity{Since: since, Soil: soil}
 
 	byID := map[string]*pile.Entry{}
@@ -92,6 +105,9 @@ func Gather(entries []*pile.Entry, log []draws.Draw, soil yield.SoilReport, sinc
 		}
 	}
 	sort.Slice(a.Fresh, func(i, j int) bool {
+		if li, lj := isLocal(a.Fresh[i]), isLocal(a.Fresh[j]); li != lj {
+			return li
+		}
 		if !a.Fresh[i].CreatedAt.Equal(a.Fresh[j].CreatedAt) {
 			return a.Fresh[i].CreatedAt.After(a.Fresh[j].CreatedAt)
 		}

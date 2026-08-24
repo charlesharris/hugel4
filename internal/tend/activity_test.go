@@ -43,7 +43,7 @@ func TestDeliveredComesFirstAndIsNotRepeatedBelow(t *testing.T) {
 	}
 	log := []draws.Draw{drew(-30, "a")}
 
-	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	if got := titles(a.Rows(0), Drawn); len(got) != 1 || got[0] != "an old entry, freshly drawn" {
 		t.Errorf("delivered = %v", got)
 	}
@@ -57,7 +57,7 @@ func TestRepeatedDrawsListOnce(t *testing.T) {
 	entries := []*pile.Entry{ent("a", "drawn a lot", -60, "s1")}
 	log := []draws.Draw{drew(-50, "a"), drew(-40, "a"), drew(-30, "a")}
 
-	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	if len(a.Delivered) != 1 {
 		t.Errorf("delivered %d rows, want 1", len(a.Delivered))
 	}
@@ -73,7 +73,7 @@ func TestWindowBoundsBothGroups(t *testing.T) {
 	}
 	log := []draws.Draw{drew(-59_000, "drawnold"), drew(-100, "new")}
 
-	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(entries, log, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	if len(a.Delivered) != 1 || a.Delivered[0].ID != "new" {
 		t.Errorf("delivered = %+v, want only the recent draw", a.Delivered)
 	}
@@ -85,7 +85,7 @@ func TestWindowBoundsBothGroups(t *testing.T) {
 // A draw whose entry has since left the pile must not crash the surface or
 // invent a row for something that cannot be read.
 func TestVanishedEntriesAreDropped(t *testing.T) {
-	a := Gather(nil, []draws.Draw{drew(-30, "gone")}, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(nil, []draws.Draw{drew(-30, "gone")}, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	if len(a.Delivered) != 0 {
 		t.Errorf("delivered = %+v, want nothing", a.Delivered)
 	}
@@ -101,7 +101,7 @@ func TestBarrenSessionsAreCounted(t *testing.T) {
 		ent("a", "from one session", -60, "s1"),
 		ent("b", "also from it", -60, "s1"),
 	}
-	a := Gather(entries, nil, yield.SoilReport{Sessions: 12}, now.Add(-24*time.Hour))
+	a := Gather(entries, nil, yield.SoilReport{Sessions: 12}, now.Add(-24*time.Hour), nil)
 	if a.Producing != 1 {
 		t.Errorf("producing = %d, want 1", a.Producing)
 	}
@@ -113,7 +113,7 @@ func TestBarrenSessionsAreCounted(t *testing.T) {
 // An empty group says something. Hiding it would turn "the pile was never
 // asked" into a blank space.
 func TestEmptyGroupsKeepTheirHeadings(t *testing.T) {
-	a := Gather(nil, nil, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(nil, nil, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	rows := a.Rows(0)
 	if len(rows) != 2 || rows[0].Kind != Heading || rows[1].Kind != Heading {
 		t.Fatalf("rows = %+v, want two headings", rows)
@@ -132,7 +132,7 @@ func TestUnjudgedCountsOnlyWhatNeedsAVerdict(t *testing.T) {
 	entries[1].Review = pile.Accepted
 	entries[2].Status = pile.Abandoned
 
-	a := Gather(entries, nil, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(entries, nil, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	if got := Unjudged(a.Rows(0)); got != 1 {
 		t.Errorf("unjudged = %d, want 1", got)
 	}
@@ -146,7 +146,7 @@ func TestGroupsAreCappedAndSaySo(t *testing.T) {
 	for i := 0; i < 249; i++ {
 		es = append(es, ent(string(rune('a'+i%26))+string(rune('a'+i/26)), "entry", -60, "s1"))
 	}
-	a := Gather(es, nil, yield.SoilReport{}, now.Add(-24*time.Hour))
+	a := Gather(es, nil, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
 	rows := a.Rows(25)
 
 	shown := 0
@@ -169,5 +169,51 @@ func TestGroupsAreCappedAndSaySo(t *testing.T) {
 	}
 	if !strings.Contains(label, "249") || !strings.Contains(label, "25") {
 		t.Errorf("heading %q should say how many were left out", label)
+	}
+}
+
+// With a cap on each group, order decides what gets judged. The project the
+// gardener is standing in comes first -- including under the names it used to
+// have -- but nothing is hidden: the pile is shared, and another bed's entries
+// still need a verdict.
+func TestLocalBedIsListedFirstWithoutHidingOthers(t *testing.T) {
+	entries := []*pile.Entry{
+		ent("far", "another project's entry", -10, "s1"),
+		ent("here", "this project's entry", -600, "s2"),
+		ent("kin", "an entry from the old name", -700, "s3"),
+	}
+	entries[0].Bed = "tourdesource"
+	entries[1].Bed = "hugel4"
+	entries[2].Bed = "hugel"
+
+	a := Gather(entries, nil, yield.SoilReport{}, now.Add(-24*time.Hour), []string{"hugel4", "hugel"})
+	if len(a.Fresh) != 3 {
+		t.Fatalf("fresh = %d entries, want all three kept", len(a.Fresh))
+	}
+	if a.Fresh[0].Bed == "tourdesource" {
+		t.Errorf("order = %s first, want the local bed ahead of a newer foreign entry",
+			a.Fresh[0].Bed)
+	}
+	if a.Fresh[2].Bed != "tourdesource" {
+		t.Errorf("order = %v, want the foreign entry last but present",
+			[]string{a.Fresh[0].Bed, a.Fresh[1].Bed, a.Fresh[2].Bed})
+	}
+	// Within the local group, recency still decides.
+	if !a.Fresh[0].CreatedAt.After(a.Fresh[1].CreatedAt) {
+		t.Error("local entries lost their recency order")
+	}
+}
+
+// Standing outside any bed the pile knows must not reorder anything.
+func TestNoHomeBedLeavesTheOrderAlone(t *testing.T) {
+	entries := []*pile.Entry{
+		ent("a", "newer", -10, "s1"),
+		ent("b", "older", -600, "s2"),
+	}
+	entries[0].Bed, entries[1].Bed = "tourdesource", "hugel4"
+
+	a := Gather(entries, nil, yield.SoilReport{}, now.Add(-24*time.Hour), nil)
+	if a.Fresh[0].Title != "newer" {
+		t.Errorf("order = %q first, want plain recency", a.Fresh[0].Title)
 	}
 }

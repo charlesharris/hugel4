@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/charris/hugel/internal/config"
 	"github.com/charris/hugel/internal/draws"
 	"github.com/charris/hugel/internal/pile"
 	"github.com/charris/hugel/internal/tend"
@@ -25,7 +26,9 @@ usage:
 
 What the garden did lately, and the judgement you pass on it. Bounded by time
 rather than by backlog: sit down after three days away and you are shown three
-days, not the whole pile.
+days, not the whole pile. Entries from the project you are standing in are
+listed first, but nothing is hidden -- the pile is shared, and another bed's
+entries still need a verdict.
 
 flags:
 `)
@@ -33,7 +36,7 @@ flags:
 	}
 	var (
 		since   = fs.String("since", "7d", "how far back to look (7d, 2w, 48h)")
-		bed     = fs.String("bed", "", "restrict to one bed")
+		bed     = fs.String("bed", "", "restrict the session counts to one bed")
 		root    = fs.String("root", "", "transcript root (default ~/.claude/projects)")
 		pileDir = fs.String("pile", "", "pile location (default ~/.hugel/pile)")
 		limit   = fs.Int("limit", 25, "most entries to show per group")
@@ -75,8 +78,14 @@ flags:
 		return err
 	}
 
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	home := cfg.KinOf(currentBed())
+
 	f := yield.Filter{Since: cutoff, Bed: *bed}
-	act := tend.Gather(entries, log, yield.Soil(sessions, log, entries, f), cutoff)
+	act := tend.Gather(entries, log, yield.Soil(sessions, log, entries, f), cutoff, home)
 
 	p := tea.NewProgram(tend.New(act, store, *limit), tea.WithAltScreen())
 	_, err = p.Run()
