@@ -215,3 +215,54 @@ func Close(dir, id, reason string) error {
 	_, err := run(dir, "close", id, "--reason", reason)
 	return err
 }
+
+// Release puts a claimed bead back in the queue, for when the tender holding it
+// died. Going through bd rather than editing a status hugel keeps means the
+// bead is available to everything else that reads the queue, not just to hugel.
+func Release(dir, id string) error {
+	_, err := run(dir, "update", id, "--status", "open")
+	return err
+}
+
+// Ready is one startable bead and the bed it belongs to.
+type Ready struct {
+	Bead Bead
+	Work *Work
+}
+
+// Queue is what could be started now, across every bed, best first.
+//
+// Highest priority wins wherever it lives, so a P0 in a quiet bed is picked
+// before a P3 in a busy one; ties break on bed then id so the order is stable
+// between runs and two dispatches see the same queue.
+//
+// Epics are excluded. An epic is a container for work rather than work, and a
+// tender handed one would try to do all of it at once.
+func Queue(work []*Work, bed string, skip func(id string) bool) []Ready {
+	var out []Ready
+	for _, w := range work {
+		if bed != "" && w.Bed != bed {
+			continue
+		}
+		for _, b := range w.Beads {
+			if !b.Ready || b.Status == "in_progress" || b.Type == "epic" {
+				continue
+			}
+			if skip != nil && skip(b.ID) {
+				continue
+			}
+			out = append(out, Ready{Bead: b, Work: w})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Bead.Priority != b.Bead.Priority {
+			return a.Bead.Priority < b.Bead.Priority
+		}
+		if a.Work.Bed != b.Work.Bed {
+			return a.Work.Bed < b.Work.Bed
+		}
+		return a.Bead.ID < b.Bead.ID
+	})
+	return out
+}

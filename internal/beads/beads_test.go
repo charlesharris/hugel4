@@ -122,3 +122,83 @@ func TestBeadDecodesFromBdJSON(t *testing.T) {
 		t.Error("updated_at did not decode")
 	}
 }
+
+func ready(id, bed string, prio int, kind string, isReady bool) Bead {
+	return Bead{ID: id, Title: id, Priority: prio, Type: kind, Status: "open", Ready: isReady}
+}
+
+// Highest priority wins wherever it lives: a P0 in a quiet bed goes before a P3
+// in a busy one, or a bed with a long backlog starves every other bed.
+func TestQueueTakesPriorityAcrossBeds(t *testing.T) {
+	busy := &Work{Bed: "tourdesource", Beads: []Bead{
+		ready("t-1", "", 2, "task", true), ready("t-2", "", 3, "task", true),
+	}}
+	quiet := &Work{Bed: "hugel4", Beads: []Bead{ready("h-1", "", 0, "task", true)}}
+
+	q := Queue([]*Work{busy, quiet}, "", nil)
+	if len(q) != 3 {
+		t.Fatalf("queued %d, want 3", len(q))
+	}
+	if q[0].Bead.ID != "h-1" {
+		t.Errorf("first = %s, want the P0 from the quiet bed", q[0].Bead.ID)
+	}
+}
+
+// Two dispatches must see the same queue, or they race for different beads and
+// the ordering means nothing.
+func TestQueueIsStable(t *testing.T) {
+	w := &Work{Bed: "b", Beads: []Bead{
+		ready("c", "", 1, "task", true), ready("a", "", 1, "task", true), ready("b", "", 1, "task", true),
+	}}
+	first := Queue([]*Work{w}, "", nil)
+	for i := 0; i < 5; i++ {
+		again := Queue([]*Work{w}, "", nil)
+		for j := range first {
+			if first[j].Bead.ID != again[j].Bead.ID {
+				t.Fatalf("queue changed between runs: %s vs %s", first[j].Bead.ID, again[j].Bead.ID)
+			}
+		}
+	}
+}
+
+// An epic is a container for work rather than work. A tender handed one would
+// try to do all of it at once.
+func TestQueueExcludesWhatCannotBeStarted(t *testing.T) {
+	w := &Work{Bed: "b", Beads: []Bead{
+		ready("epic", "", 0, "epic", true),
+		ready("blocked", "", 0, "task", false),
+		ready("claimed", "", 0, "task", true),
+		ready("good", "", 1, "task", true),
+	}}
+	w.Beads[2].Status = "in_progress"
+
+	q := Queue([]*Work{w}, "", nil)
+	if len(q) != 1 || q[0].Bead.ID != "good" {
+		var got []string
+		for _, r := range q {
+			got = append(got, r.Bead.ID)
+		}
+		t.Errorf("queue = %v, want only the startable one", got)
+	}
+}
+
+// A bead already tended once must not be picked up again by a later dispatch:
+// two agents on one branch is the collision the pool exists to avoid.
+func TestQueueSkipsWhatIsAlreadyTended(t *testing.T) {
+	w := &Work{Bed: "b", Beads: []Bead{
+		ready("done-once", "", 0, "task", true), ready("fresh", "", 1, "task", true),
+	}}
+	q := Queue([]*Work{w}, "", func(id string) bool { return id == "done-once" })
+	if len(q) != 1 || q[0].Bead.ID != "fresh" {
+		t.Errorf("queue = %+v, want the untended bead only", q)
+	}
+}
+
+func TestQueueRestrictsToABed(t *testing.T) {
+	a := &Work{Bed: "a", Beads: []Bead{ready("a-1", "", 0, "task", true)}}
+	b := &Work{Bed: "b", Beads: []Bead{ready("b-1", "", 0, "task", true)}}
+	q := Queue([]*Work{a, b}, "b", nil)
+	if len(q) != 1 || q[0].Bead.ID != "b-1" {
+		t.Errorf("queue = %+v, want only bed b", q)
+	}
+}

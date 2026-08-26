@@ -180,3 +180,48 @@ func git(dir string, args ...string) error {
 	}
 	return nil
 }
+
+// Live returns tenders with an agent still working. A tender that has written
+// its result is finished even if its pane is still open, because the result is
+// what the garden goes by.
+func Live() ([]Tender, error) {
+	all, err := List()
+	if err != nil {
+		return nil, err
+	}
+	var out []Tender
+	for _, t := range all {
+		if t.State() == "working" {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// Stopped returns tenders whose agent is gone and which never wrote a result.
+//
+// This is the failure the pool has to notice. A tender that died holding a bead
+// leaves the bead claimed and the slot spent, and nothing else in the system is
+// watching for it: tmux does not know what the session was for, and bd does not
+// know the claimant stopped existing.
+func Stopped() ([]Tender, error) {
+	all, err := List()
+	if err != nil {
+		return nil, err
+	}
+	var out []Tender
+	for _, t := range all {
+		if t.State() == "stopped" {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// Exists reports whether a bead has been tended before, in any state. Starting
+// a second tender on a bead that already has a worktree would have two agents
+// writing to one branch.
+func Exists(bead string) bool {
+	_, err := Load(bead)
+	return err == nil
+}

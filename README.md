@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Eleven commands work.
+Earliest days. Twelve commands work.
 
 ## `hugel yield`
 
@@ -259,6 +259,40 @@ from being reproduced.
 
 A project whose tests hugel cannot find cannot be gated. Discovery never guesses
 its way to a pass: no test command means a refusal, not a skip.
+
+## `hugel dispatch`
+
+Fill the tender slots from the ready queue.
+
+```
+hugel dispatch [--slots 2] [--bed NAME] [--dry-run]
+```
+
+Counts the tenders still working, starts more on the highest-priority ready
+beads until the slots are full, and returns.
+
+**It is not a daemon on purpose.** A command that fills the slots and exits can
+be run from anything that already knows how to repeat — a shell loop, a timer, a
+keystroke — and can be understood by reading it once. Nothing has to survive a
+crash, because nothing is running to crash.
+
+Priority wins wherever it lives, so a P0 in a quiet bed goes before a P3 in a
+busy one; otherwise one long backlog starves every other bed. Ordering is
+stable between runs, so two dispatches see the same queue rather than racing
+for different beads.
+
+A bead already tended once is skipped — two agents on one branch is the
+collision the pool exists to avoid — and epics are skipped, being containers for
+work rather than work.
+
+**A tender that dies holding a bead is the failure nothing else notices.** tmux
+doesn't know what the session was for and bd doesn't know its claimant stopped
+existing, so dispatch reaps them: a tender whose agent is gone with no result
+written has its bead released back to the queue. The worktree is kept, because
+the bead being available again does not require throwing away the evidence of
+why it failed.
+
+Two dispatches cannot race: an exclusive file create is the whole lock.
 
 ## `hugel hooks`
 

@@ -25,6 +25,7 @@ usage:
   hugel tend              judge what the garden did
   hugel tender <bead>     work one bead, unattended, in tmux
   hugel gate <bead>       test, review, test again, then land it
+  hugel dispatch          fill the tender slots from the ready queue
   hugel hooks <name>      what the harness runs on hugel's behalf
 
 run "hugel <command> -h" for flags.
@@ -57,6 +58,8 @@ func Run(args []string) error {
 		return runTender(args[1:])
 	case "gate":
 		return runGate(args[1:])
+	case "dispatch":
+		return runDispatch(args[1:])
 	case "hooks":
 		return runHooks(args[1:])
 	case "-h", "--help", "help":
