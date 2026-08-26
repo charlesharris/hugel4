@@ -10,6 +10,7 @@ import (
 
 	"github.com/charris/hugel/internal/beads"
 	"github.com/charris/hugel/internal/draws"
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/pile"
 	"github.com/charris/hugel/internal/tender"
 	"github.com/charris/hugel/internal/transcript"
@@ -388,27 +389,69 @@ func showChanges(sessions []*transcript.Session, f yield.Filter, asJSON bool, li
 	return nil
 }
 
-// gatherAttempts reads every tender run the garden has recorded and asks bd
-// whether its bead landed. Archived attempts count: a bead handed back once and
-// tended again cost twice.
+// gatherAttempts reads every tender run the garden has recorded and works out
+// which of them landed.
+//
+// The log is the record; tender state files fill in the runs that happened
+// before the log existed, so moving the source does not erase the history it
+// cannot cover. bd is asked only about beads the gate never landed, since work
+// merged by hand is accepted change too and dropping it would understate what
+// landed.
 func gatherAttempts() ([]yield.Attempt, error) {
-	all, err := tender.List()
+	log, err := events.Load()
 	if err != nil {
 		return nil, err
 	}
-	landed := map[string]bool{}
-	var out []yield.Attempt
-	for _, t := range all {
-		if _, seen := landed[t.Bead]; !seen {
-			if b, err := beads.Get(t.Repo, t.Bead); err == nil {
-				landed[t.Bead] = b.Status == "closed"
-			} else {
-				landed[t.Bead] = false
-			}
+	out := yield.Attempts(log)
+
+	repo := map[string]string{}
+	for _, e := range log {
+		if r, ok := e.Fields["repo"].(string); ok && r != "" {
+			repo[e.Bead] = r
+		}
+	}
+
+	state, err := tender.List()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range state {
+		if recorded(out, t.Bead, t.Started) {
+			continue
+		}
+		if repo[t.Bead] == "" {
+			repo[t.Bead] = t.Repo
 		}
 		out = append(out, yield.Attempt{
-			Bead: t.Bead, Bed: t.Bed, Worktree: t.Worktree, Landed: landed[t.Bead],
+			Bead: t.Bead, Bed: t.Bed, Worktree: t.Worktree, Started: t.Started,
 		})
 	}
+
+	closed := map[string]bool{}
+	for i, a := range out {
+		if a.Landed {
+			continue
+		}
+		if _, asked := closed[a.Bead]; !asked {
+			b, err := beads.Get(repo[a.Bead], a.Bead)
+			closed[a.Bead] = repo[a.Bead] != "" && err == nil && b.Status == "closed"
+		}
+		out[i].Landed = closed[a.Bead]
+	}
 	return out, nil
+}
+
+// recorded reports whether the log already has this run. The state file and the
+// event are written moments apart in the same start, so the same run has to be
+// recognised across both rather than counted as two attempts.
+func recorded(known []yield.Attempt, bead string, started time.Time) bool {
+	for _, a := range known {
+		if a.Bead != bead {
+			continue
+		}
+		if d := a.Started.Sub(started); d > -10*time.Minute && d < 10*time.Minute {
+			return true
+		}
+	}
+	return false
 }

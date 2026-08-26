@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/transcript"
 )
 
@@ -141,5 +142,59 @@ func TestChangesRespectTheWindow(t *testing.T) {
 	rep := Changes(sessions, attempts, Filter{Since: base.Add(-time.Hour)})
 	if got := rep.Changes[0].Total(); got < 9.9 || got > 10.1 {
 		t.Errorf("cost = %.2f, want only the session inside the window", got)
+	}
+}
+
+// The runs a bead cost are read from what the tender wrote when it started,
+// rather than from the directory it left behind.
+func TestAttemptsComeFromTheLog(t *testing.T) {
+	log := []events.Event{
+		{Name: "tender.start", Bead: "a-1", Bed: "b", Time: base, Outcome: "ok",
+			Fields: events.F{"worktree": "/w/a-1/b", "repo": "/src/b"}},
+		{Name: "gate.run", Bead: "a-1", Outcome: "failed"},
+		{Name: "tender.start", Bead: "a-1", Bed: "b", Time: base.Add(time.Hour), Outcome: "ok",
+			Fields: events.F{"worktree": "/w/a-1/b"}},
+		{Name: "gate.land", Bead: "a-1", Fields: events.F{"sha": "abc"}},
+		{Name: "tender.start", Bead: "a-2", Bed: "b", Time: base, Outcome: "ok",
+			Fields: events.F{"worktree": "/w/a-2/b"}},
+	}
+	got := Attempts(log)
+	if len(got) != 3 {
+		t.Fatalf("got %d attempts, want one per tender run: %+v", len(got), got)
+	}
+	if got[0].Worktree != "/w/a-1/b" || got[0].Bed != "b" || !got[0].Started.Equal(base) {
+		t.Errorf("attempt = %+v", got[0])
+	}
+	// Landing is the bead's, so the run that was handed back counts as part of
+	// what landing cost.
+	if !got[0].Landed || !got[1].Landed {
+		t.Errorf("a bead tended twice and then landed did land: %+v", got[:2])
+	}
+	if got[2].Landed {
+		t.Error("a-2 never went through the gate and is not landed")
+	}
+}
+
+// Only the gate can say a change was accepted. A bead closed by hand, or
+// superseded, or abandoned, has not been through anything.
+func TestLandedIsTheGatesWordNotTheTrackers(t *testing.T) {
+	got := Attempts([]events.Event{
+		{Name: "tender.start", Bead: "a-1", Time: base, Outcome: "ok",
+			Fields: events.F{"worktree": "/w/a-1/b"}},
+		{Name: "tender.handback", Bead: "a-1", Outcome: "blocked"},
+	})
+	if len(got) != 1 || got[0].Landed {
+		t.Errorf("attempts = %+v, want one that did not land", got)
+	}
+}
+
+// A tender that could not be launched left no worktree and spent nothing.
+func TestAFailedStartIsNotAnAttempt(t *testing.T) {
+	got := Attempts([]events.Event{
+		{Name: "tender.start", Bead: "a-1", Time: base, Outcome: "failed",
+			Fields: events.F{"error": "tmux is not installed"}},
+	})
+	if len(got) != 0 {
+		t.Errorf("attempts = %+v, want none", got)
 	}
 }

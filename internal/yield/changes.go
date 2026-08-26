@@ -3,7 +3,9 @@ package yield
 import (
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/pricing"
 	"github.com/charris/hugel/internal/transcript"
 )
@@ -15,7 +17,50 @@ type Attempt struct {
 	Bead     string
 	Bed      string
 	Worktree string
-	Landed   bool // its bead was closed
+	Landed   bool // the change was accepted
+
+	// Started is when the tender began. Accounting does not use it: it is here
+	// so that a caller reading runs from more than one source can tell whether
+	// two records describe the same run.
+	Started time.Time
+}
+
+// Attempts reads tender runs out of the event log.
+//
+// The log is the record. A tender writes tender.start when it begins and the
+// gate writes gate.land when the work goes in, and neither can be tidied away
+// by deleting a directory the way tender state can.
+//
+// Landing is taken from the gate rather than from the tracker. A bead can be
+// closed for any number of reasons -- superseded, abandoned, finished by hand --
+// and only gate.land says the change was tested, reviewed and merged. Beads the
+// gate never landed are left unlanded here for the caller to decide about,
+// because work merged by hand is accepted change too.
+func Attempts(log []events.Event) []Attempt {
+	var out []Attempt
+	landed := map[string]bool{}
+	for _, e := range log {
+		switch e.Name {
+		case "tender.start":
+			// A tender that could not be launched left no worktree and spent
+			// nothing, so it is not an attempt at anything.
+			if e.Outcome == "failed" {
+				continue
+			}
+			w, _ := e.Fields["worktree"].(string)
+			out = append(out, Attempt{
+				Bead: e.Bead, Bed: e.Bed, Worktree: w, Started: e.Time,
+			})
+		case "gate.land":
+			landed[e.Bead] = true
+		}
+	}
+	// Landing is a property of the bead rather than of one run: a bead tended
+	// twice and then landed did land, and both runs are what it cost.
+	for i := range out {
+		out[i].Landed = landed[out[i].Bead]
+	}
+	return out
 }
 
 // Change is what one bead cost to land, or to not land.
@@ -77,8 +122,10 @@ func (r ChangeReport) Coverage() float64 {
 // they ran in.
 //
 // A tender and the reviewer that gated it both run in the same worktree, so
-// both land on the same bead without either being told to. That is attribution
-// by path, which is inference: tender lifecycle events would make it a record.
+// both land on the same bead without either being told to. Which worktree is
+// now read from the log the tender wrote when it started, rather than from the
+// directory it left behind; the last inference is the path itself, since
+// nothing records which transcript belongs to which tmux session.
 func Changes(sessions []*transcript.Session, attempts []Attempt, f Filter) ChangeReport {
 	var rep ChangeReport
 	byBead := map[string]*Change{}
