@@ -22,7 +22,8 @@ install: build
 	mkdir -p $(dir $(BIN)) $(SKILLS)
 	cp bin/hugel $(BIN)
 	ln -sfn $(CURDIR)/skills/hugel-soil $(SKILLS)/hugel-soil
-	@echo "installed $(BIN) and $(SKILLS)/hugel-soil"
+	ln -sfn $(CURDIR)/skills/hugel-beads $(SKILLS)/hugel-beads
+	@echo "installed $(BIN) and skills into $(SKILLS)"
 
 clean:
 	rm -rf bin

@@ -385,6 +385,20 @@ down-weighted; knowledge someone threw away should not surface at all.
 One entry cannot spend the whole budget. Soil is a survey of what the pile
 knows; reading an entry in full is a second, deliberate step.
 
+## The skills
+
+Two, both installed by `make install` and symlinked so edits are live.
+
+**`hugel-soil`** is the pull path: an agent decides it needs prior knowledge and
+draws a budgeted survey. **`hugel-beads`** is the planning path: draft work with
+the user, review it, then file it through bd.
+
+The second exists because a bead is paid for twice — it directs a tender, and
+closing it with a reason is what the pile composts. It says to draft in the
+conversation and file only what the user agrees to, because an agent that files
+work unreviewed fills the queue with intentions, and a queue nobody trusts is
+worse than a list nobody wrote.
+
 ## The soil skill
 
 Nothing draws soil unless something asks for it, and the cheapest thing that
