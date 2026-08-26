@@ -56,9 +56,22 @@ func Run(o Options) (Report, error) {
 		return stop("tests fail on the tender's branch")
 	}
 
+	// Read the bead fresh rather than trusting anything captured when the work
+	// started. A gate that reviews against stale criteria is reviewing against
+	// a spec nobody holds any more.
+	accept := ""
+	if b, err := beads.Get(t.Repo, t.Bead); err == nil {
+		accept = b.Accept
+	} else {
+		o.say("could not read %s from bd: %v", t.Bead, err)
+	}
+	if strings.TrimSpace(accept) == "" {
+		o.say("%s states no acceptance criteria; the review has nothing to answer against", t.Bead)
+	}
+
 	o.say("starting the review")
 	start = time.Now()
-	verdict, why, err := review(o, out)
+	verdict, why, err := review(o, accept, out)
 	if err != nil {
 		step(StageReview, false, err.Error(), time.Since(start))
 		return stop("the review could not be run: " + err.Error())

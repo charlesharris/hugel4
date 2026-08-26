@@ -63,11 +63,11 @@ func reviewPath(t tender.Tender) string {
 // whether its own work is good has every reason to say yes and no way to see
 // what it did not think of, so the reviewer is told what the bead asked for and
 // left to find the difference itself.
-func ReviewBrief(t tender.Tender, testOutput string) string {
+func ReviewBrief(t tender.Tender, accept, testOutput string) string {
 	return fmt.Sprintf(`# Review %s
 
 %s
-
+%s
 ## What you are doing
 
 Another agent worked this bead in this worktree, on branch %s. You are the
@@ -78,6 +78,14 @@ You have the bead above, the diff (git diff %s...HEAD), the tender's own account
 in %s, and the test output below.
 
 ## What to check
+
+Start with the acceptance criteria above, if there are any. Take them one at a
+time and say whether each is met, and how you checked. That question is
+decidable; "is this good work" is not, and an agent asked the second one about
+another agent's code will tend to say yes.
+
+Criteria are a floor and not a ceiling. Code can meet every one of them and
+still be wrong, so once they are answered, keep looking:
 
 - Does it do what the bead asked, rather than something adjacent?
 - Is it correct? Look for the failure the tests do not cover.
@@ -98,6 +106,10 @@ worth nothing.
 
 Write %s, exactly this shape:
 
+    ## Criteria
+    one line per acceptance criterion: met | not met | unclear, and how you
+    checked. Omit this section only if the bead stated none.
+
     ## Verdict
     pass | changes-needed | reject
     one sentence saying why
@@ -105,22 +117,36 @@ Write %s, exactly this shape:
     ## Findings
     what you found, most serious first; nothing if nothing
 
-Say pass only if you would merge it yourself. Say changes-needed if it is close
+Say pass only if every stated criterion is met and you would merge it yourself.
+An unmet criterion is changes-needed at best, whatever else is good about the
+work. Say changes-needed if it is close
 and you can name what is missing. Say reject if it is the wrong solution.
 Writing that file is how the gate learns you are done, so write it last.
 
 Change nothing. Do not commit, do not fix what you find, do not touch the
 branch. Naming a problem and repairing it are two different jobs, and doing both
 means nobody reviewed the repair.
-`, t.Bead, t.Title, t.Branch, defaultBase, t.ResultPath(), tail(testOutput, 30), reviewPath(t))
+`, t.Bead, t.Title, acceptSection(accept), t.Branch, defaultBase, t.ResultPath(), tail(testOutput, 30), reviewPath(t))
+}
+
+// acceptSection renders the bead's acceptance criteria, or says plainly that
+// there are none. Silence would leave the reviewer to guess whether criteria
+// existed and were withheld, and a reviewer that invents a standard is back to
+// answering "is this good work".
+func acceptSection(accept string) string {
+	if strings.TrimSpace(accept) == "" {
+		return "\n## Acceptance criteria\n\nThe bead states none. Judge it against what the bead asks for, and say in\nyour findings that it shipped without criteria.\n"
+	}
+	return "\n## Acceptance criteria\n\nThis is what the work was promised to do. Answer against it.\n\n" +
+		strings.TrimSpace(accept) + "\n"
 }
 
 const defaultBase = "main"
 
 // review runs the reviewing agent and waits for its answer.
-func review(o Options, testOutput string) (Verdict, string, error) {
+func review(o Options, accept, testOutput string) (Verdict, string, error) {
 	t := o.Tender
-	brief := ReviewBrief(t, testOutput)
+	brief := ReviewBrief(t, accept, testOutput)
 	if err := os.WriteFile(reviewBriefPath(t), []byte(brief), 0o644); err != nil {
 		return Reject, "", err
 	}

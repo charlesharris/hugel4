@@ -114,6 +114,14 @@ func Brief(o Options, t Tender) string {
 	if strings.TrimSpace(o.Bead.Body) != "" {
 		fmt.Fprintf(&b, "%s\n\n", strings.TrimSpace(o.Bead.Body))
 	}
+	if strings.TrimSpace(o.Bead.Accept) != "" {
+		// The same criteria the review will be answered against. A tender that
+		// does not know what done looks like builds something a reviewer then
+		// rejects, and the two of them disagree about a standard only one of
+		// them was shown.
+		fmt.Fprintf(&b, "## Done when\n\n%s\n\nThe review will be answered against exactly this, one item at a time.\n\n",
+			strings.TrimSpace(o.Bead.Accept))
+	}
 	if strings.TrimSpace(o.Extra) != "" {
 		fmt.Fprintf(&b, "## Also\n\n%s\n\n", strings.TrimSpace(o.Extra))
 	}

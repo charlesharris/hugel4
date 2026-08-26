@@ -27,6 +27,7 @@ type Bead struct {
 	ID       string    `json:"id"`
 	Title    string    `json:"title"`
 	Body     string    `json:"description,omitempty"`
+	Accept   string    `json:"acceptance_criteria,omitempty"`
 	Type     string    `json:"issue_type"`
 	Status   string    `json:"status"`
 	Priority int       `json:"priority"`
@@ -198,6 +199,26 @@ func Survey(dirs map[string]string) ([]*Work, []error) {
 		return out[i].Bed < out[j].Bed
 	})
 	return out, problems
+}
+
+// Get returns one bead by id, read fresh from bd.
+//
+// Fresh rather than from anything hugel stored when the work started: a bead's
+// acceptance criteria are the thing a review is answered against, and if they
+// were amended while the work was in flight it is the amended ones that decide.
+func Get(dir, id string) (*Bead, error) {
+	out, err := run(dir, "show", id, "--json")
+	if err != nil {
+		return nil, err
+	}
+	var found []Bead
+	if err := json.Unmarshal(out, &found); err != nil {
+		return nil, fmt.Errorf("read bead %s: %w", id, err)
+	}
+	if len(found) == 0 {
+		return nil, fmt.Errorf("no bead %s", id)
+	}
+	return &found[0], nil
 }
 
 // Claim marks a bead as being worked, through bd rather than in a status hugel

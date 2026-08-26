@@ -247,6 +247,22 @@ think of. The reviewer is told the bead, given the diff, and asked to find the
 difference — and told to change nothing, because naming a problem and repairing
 it are two jobs, and doing both means nobody reviewed the repair.
 
+**The reviewer answers against the bead's acceptance criteria**, item by item,
+before anything else. *Is this good work* is a judgement, and an agent asked
+that about another agent's code will tend to say yes; *does this meet these* has
+an answer. An unmet criterion blocks a pass whatever else is good about the
+work. The criteria are read fresh from bd at gate time, not from anything
+captured when the tender started — a gate reviewing against stale criteria is
+reviewing against a spec nobody holds any more.
+
+They are a floor, not a ceiling: code can meet every criterion and still be
+wrong, so the reviewer is told to keep reading past them. A bead that states no
+criteria says so plainly in the brief and the reviewer is asked to report the
+absence, because silence would leave it inventing a standard.
+
+The tender is shown the same criteria. Otherwise the two agents disagree about a
+standard only one of them was told.
+
 **A review that states no verdict is a refusal.** A reviewer that rambled,
 crashed, or answered a different question has not approved anything. Treating
 silence as a pass would make the review decorative.

@@ -192,3 +192,28 @@ func TestBriefWithoutSoilHasNoSoilSection(t *testing.T) {
 		t.Error("an empty soil section was rendered")
 	}
 }
+
+// The tender is shown the same criteria the review will be answered against.
+// Without that the two disagree about a standard only one of them was told.
+func TestBriefCarriesTheAcceptanceCriteria(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	o.Bead.Accept = "A spike leaves no diff, and its findings reach the pile."
+	b := Brief(o, td)
+
+	if !strings.Contains(b, "A spike leaves no diff") {
+		t.Error("the criteria did not reach the tender's brief")
+	}
+	if !strings.Contains(b, "Done when") {
+		t.Error("the criteria arrived without saying what they are")
+	}
+	if !strings.Contains(b, "answered against exactly this") {
+		t.Error("the tender is not told the review uses the same criteria")
+	}
+}
+
+func TestBriefWithoutCriteriaHasNoDoneWhenSection(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	if strings.Contains(Brief(o, td), "Done when") {
+		t.Error("an empty criteria section was rendered")
+	}
+}

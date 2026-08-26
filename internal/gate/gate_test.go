@@ -166,7 +166,7 @@ func TestFailingTestsStopBeforeTheReview(t *testing.T) {
 // repair.
 func TestReviewBriefForbidsRepair(t *testing.T) {
 	td := tender.Tender{Bead: "x-1", Title: "a bead", Branch: "hugel/x-1", Worktree: "/w/bed"}
-	b := ReviewBrief(td, "ok")
+	b := ReviewBrief(td, "", "ok")
 	for _, want := range []string{"Change nothing", "do not fix what you find", "Read the code", "## Verdict"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("review brief is missing %q", want)
@@ -198,5 +198,52 @@ func TestDryRunStopsAfterTheReview(t *testing.T) {
 		if s.Stage == StageMerge || s.Stage == StagePush || s.Stage == StageClose {
 			t.Errorf("a dry run reached %s", s.Stage)
 		}
+	}
+}
+
+// The criteria are what turns "is this good work" -- which an agent asked about
+// another agent's code will tend to answer yes -- into a question with an
+// answer.
+func TestReviewBriefCarriesTheAcceptanceCriteria(t *testing.T) {
+	td := tender.Tender{Bead: "x-1", Title: "a bead", Branch: "hugel/x-1", Worktree: "/w/bed"}
+	b := ReviewBrief(td, "The draw is recorded, and a failed write does not fail the caller.", "ok")
+
+	if !strings.Contains(b, "a failed write does not fail the caller") {
+		t.Error("the criteria did not reach the brief")
+	}
+	if !strings.Contains(b, "## Criteria") {
+		t.Error("the reviewer is not asked to answer criterion by criterion")
+	}
+	if !strings.Contains(b, "Say pass only if every stated criterion is met") {
+		t.Error("an unmet criterion is not stated to block a pass")
+	}
+}
+
+// A bead with no criteria must say so. Silence leaves the reviewer to guess
+// whether criteria existed and were withheld, and a reviewer that invents a
+// standard is back to judging whether the work is nice.
+func TestReviewBriefSaysWhenThereAreNoCriteria(t *testing.T) {
+	td := tender.Tender{Bead: "x-1", Title: "a bead", Branch: "hugel/x-1", Worktree: "/w/bed"}
+	b := ReviewBrief(td, "   \n  ", "ok")
+
+	if !strings.Contains(b, "states none") {
+		t.Error("a bead without criteria does not say so")
+	}
+	if !strings.Contains(b, "shipped without criteria") {
+		t.Error("the reviewer is not asked to report the absence")
+	}
+}
+
+// Criteria are a floor. Work can meet every one and still be wrong, and a
+// reviewer told only to tick boxes stops looking at the code.
+func TestReviewBriefKeepsTheReviewerLookingPastTheCriteria(t *testing.T) {
+	td := tender.Tender{Bead: "x-1", Title: "a bead", Branch: "hugel/x-1", Worktree: "/w/bed"}
+	b := ReviewBrief(td, "it compiles", "ok")
+
+	if !strings.Contains(b, "floor and not a ceiling") {
+		t.Error("the brief presents the criteria as sufficient")
+	}
+	if !strings.Contains(b, "Read the code") {
+		t.Error("the brief stopped telling the reviewer to read the code")
 	}
 }
