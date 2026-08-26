@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/tender"
 )
 
@@ -228,5 +229,92 @@ func TestReviewBriefKeepsTheReviewerLookingPastTheCriteria(t *testing.T) {
 	}
 	if !strings.Contains(b, "Read the code") {
 		t.Error("the brief stopped telling the reviewer to read the code")
+	}
+}
+
+// The acceptance this bead was filed against: a refusal has to be
+// reconstructable from events alone, without the worktree, the terminal it ran
+// in, or anyone's memory of three weeks ago.
+func TestARefusalIsReconstructableFromEventsAlone(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	dir := t.TempDir()
+	work := filepath.Join(dir, "bed")
+	os.MkdirAll(work, 0o755)
+	td := tender.Tender{
+		Bead: "x-1", Bed: "somebed", Worktree: work,
+		Branch: "hugel/x-1", Started: time.Now().Add(-time.Minute),
+	}
+	os.WriteFile(td.ResultPath(), []byte("## Outcome\ndone\n"), 0o644)
+
+	rep, err := Run(Options{
+		Tender: td, Test: "echo 'FAIL: the thing is broken' && exit 1",
+		Into: "main", Remote: "origin",
+	})
+	if err != nil || rep.Passed {
+		t.Fatalf("expected a refusal, got %+v %v", rep, err)
+	}
+
+	log, err := events.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]events.Event{}
+	for _, e := range log {
+		byName[e.Name] = e
+		if e.Bead != "x-1" || e.Bed != "somebed" {
+			t.Errorf("%s lost its correlation keys: %+v", e.Name, e)
+		}
+	}
+
+	// Which stage refused, and on what evidence.
+	stage, ok := byName["gate.stage"]
+	if !ok || stage.Outcome != "failed" {
+		t.Fatalf("no failed stage event: %+v", byName)
+	}
+	if d, _ := stage.Fields["detail"].(string); !strings.Contains(d, "the thing is broken") {
+		t.Errorf("the stage event did not carry the evidence it refused on: %v", stage.Fields["detail"])
+	}
+
+	// What was run, and against what.
+	test, ok := byName["gate.test"]
+	if !ok || test.Outcome != "failed" || test.Fields["on"] != "branch" {
+		t.Errorf("gate.test = %+v, want a failed run on the branch", test)
+	}
+
+	// One findable row for the whole run, so the question does not require
+	// walking the stages.
+	run, ok := byName["gate.run"]
+	if !ok || run.Outcome != "failed" {
+		t.Fatalf("no gate.run event: %+v", byName)
+	}
+	if run.Fields["reached"] != string(StageTest) {
+		t.Errorf("gate.run reached = %v, want the stage it stopped at", run.Fields["reached"])
+	}
+	if why, _ := run.Fields["why"].(string); !strings.Contains(why, "tests fail") {
+		t.Errorf("gate.run why = %v", why)
+	}
+	// The tender's own extent, so a done tender's life closes here rather than
+	// being unrecorded until someone reads its worktree.
+	if ms, _ := run.Fields["tender_duration_ms"].(float64); ms < 1000 {
+		t.Errorf("tender_duration_ms = %v, want the tender's extent", ms)
+	}
+}
+
+// A gate that never started an agent must not claim it reviewed anything.
+func TestNoReviewEventWhenTheGateStopsFirst(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	dir := t.TempDir()
+	work := filepath.Join(dir, "bed")
+	os.MkdirAll(work, 0o755)
+	td := tender.Tender{Bead: "x-1", Worktree: work}
+	os.WriteFile(td.ResultPath(), []byte("## Outcome\nblocked\n"), 0o644)
+
+	Run(Options{Tender: td, Test: "true"})
+
+	log, _ := events.Load()
+	for _, e := range log {
+		if e.Name == "gate.review" || e.Name == "gate.land" {
+			t.Errorf("emitted %s after refusing at the result stage", e.Name)
+		}
 	}
 }

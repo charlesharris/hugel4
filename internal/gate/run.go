@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charris/hugel/internal/beads"
+	"github.com/charris/hugel/internal/events"
 )
 
 // Run takes a finished tender through the gate.
@@ -17,13 +18,44 @@ import (
 func Run(o Options) (Report, error) {
 	t := o.Tender
 	rep := Report{Bead: t.Bead}
+	began := time.Now()
+
+	// One event per stage, carrying the detail the refusal rests on rather than
+	// a summary of it. A gate that refused three weeks ago has to be as legible
+	// as one that refused now, and the detail is the part that goes stale in a
+	// person's memory first.
 	step := func(s Stage, ok bool, detail string, took time.Duration) {
 		rep.Reached = s
 		rep.Stages = append(rep.Stages, StageResultRecord{Stage: s, OK: ok, Detail: detail, Took: took})
+		events.Emit(events.Event{
+			Name: "gate.stage", Bead: t.Bead, Bed: t.Bed,
+			Outcome: outcomeOf(ok), Duration: took,
+			Fields: events.F{
+				"stage": string(s), "detail": detail,
+				"branch": t.Branch, "into": o.Into, "remote": o.Remote,
+			},
+		})
+	}
+	// A gate run is itself a unit of work, so it gets its own event. The stages
+	// make a refusal reconstructable; this makes it findable without walking
+	// them, which is the difference between a question that is answerable and
+	// one that is worth asking.
+	finish := func(r Report) Report {
+		events.Emit(events.Event{
+			Name: "gate.run", Bead: t.Bead, Bed: t.Bed,
+			Outcome: outcomeOf(r.Passed), Duration: time.Since(began),
+			Fields: events.F{
+				"reached": string(r.Reached), "why": r.Why,
+				"stages": len(r.Stages), "branch": t.Branch,
+				"dry_run": o.DryRun, "into": o.Into, "remote": o.Remote,
+				"tender_duration_ms": time.Since(t.Started).Milliseconds(),
+			},
+		})
+		return r
 	}
 	stop := func(why string) (Report, error) {
 		rep.Passed, rep.Why = false, why
-		return rep, nil
+		return finish(rep), nil
 	}
 
 	// The tender's own account. A tender that reported itself blocked has said
@@ -51,6 +83,10 @@ func Run(o Options) (Report, error) {
 	o.say("testing the branch: %s", test)
 	start := time.Now()
 	out, err := runTests(t.Worktree, test)
+	events.Emit(events.Event{
+		Name: "gate.test", Bead: t.Bead, Bed: t.Bed, Outcome: outcomeOf(err == nil),
+		Duration: time.Since(start), Fields: events.F{"command": test, "on": "branch"},
+	})
 	step(StageTest, err == nil, tail(out, 12), time.Since(start))
 	if err != nil {
 		return stop("tests fail on the tender's branch")
@@ -76,6 +112,14 @@ func Run(o Options) (Report, error) {
 		step(StageReview, false, err.Error(), time.Since(start))
 		return stop("the review could not be run: " + err.Error())
 	}
+	events.Emit(events.Event{
+		Name: "gate.review", Bead: t.Bead, Bed: t.Bed, Outcome: string(verdict),
+		Duration: time.Since(start),
+		Fields: events.F{
+			"why": why, "reviewer_session": t.Session + "-review",
+			"had_criteria": strings.TrimSpace(accept) != "",
+		},
+	})
 	step(StageReview, verdict == Pass, string(verdict)+": "+why, time.Since(start))
 	if verdict != Pass {
 		return stop(fmt.Sprintf("the review said %s: %s", verdict, why))
@@ -83,7 +127,7 @@ func Run(o Options) (Report, error) {
 
 	if o.DryRun {
 		rep.Passed, rep.Why = true, "would land; stopped before merging (--dry-run)"
-		return rep, nil
+		return finish(rep), nil
 	}
 
 	// Merge onto whatever the base has become, in the tender's own worktree, so
@@ -110,6 +154,10 @@ func Run(o Options) (Report, error) {
 	o.say("testing the merged tree")
 	start = time.Now()
 	out, err = runTests(t.Worktree, test)
+	events.Emit(events.Event{
+		Name: "gate.test", Bead: t.Bead, Bed: t.Bed, Outcome: outcomeOf(err == nil),
+		Duration: time.Since(start), Fields: events.F{"command": test, "on": "merged", "base": baseRef(o)},
+	})
 	step(StageRetest, err == nil, tail(out, 12), time.Since(start))
 	if err != nil {
 		return stop("tests fail once merged with " + baseRef(o) + ", though they passed on the branch")
@@ -136,6 +184,13 @@ func Run(o Options) (Report, error) {
 		}
 	}
 	step(StagePush, true, pushDetail(o), time.Since(start))
+	events.Emit(events.Event{
+		Name: "gate.land", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
+		Fields: events.F{
+			"sha": strings.TrimSpace(head), "into": o.Into, "remote": o.Remote,
+			"pushed": o.Remote != "",
+		},
+	})
 
 	reason := closeReason(t.Reason(), why)
 	if err := beads.Close(t.Repo, t.Bead, reason); err != nil {
@@ -146,7 +201,15 @@ func Run(o Options) (Report, error) {
 
 	rep.Passed = true
 	rep.Why = "landed on " + o.Into
-	return rep, nil
+	return finish(rep), nil
+}
+
+// outcomeOf is the one word an event carries for how a stage went.
+func outcomeOf(ok bool) string {
+	if ok {
+		return "ok"
+	}
+	return "failed"
 }
 
 func baseRef(o Options) string {
