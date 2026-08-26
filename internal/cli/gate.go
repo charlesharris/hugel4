@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/gate"
+	"github.com/charris/hugel/internal/survival"
 	"github.com/charris/hugel/internal/tender"
 )
 
@@ -19,6 +22,7 @@ func runGate(args []string) error {
 usage:
   hugel gate <bead> [--into main] [--remote origin] [--test "make test"]
   hugel gate <bead> --dry-run     everything except merging, pushing and closing
+  hugel gate --grade              what became of the work it approved
 
 Work, test, review, test, commit. The second test runs on the branch merged with
 whatever the base has become, which is the only test whose result is true of what
@@ -42,10 +46,18 @@ flags:
 		dry     = fs.Bool("dry-run", false, "stop before anything irreversible")
 		ask     = fs.Bool("ask-permission", false, "let the reviewer stop and ask")
 		verbose = fs.Bool("v", false, "print each stage's output")
+		grade   = fs.Bool("grade", false, "report the survival rate of approved work")
+		since   = fs.String("since", "90d", "with --grade: landings within this window")
+		mature  = fs.String("mature", "7d", "with --grade: how long a landing must stand before it is judged")
+		bed     = fs.String("bed", "", "with --grade: restrict to one bed")
+		asJSON  = fs.Bool("json", false, "with --grade: emit JSON")
 	)
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
+	}
+	if *grade {
+		return showSurvival(*since, *mature, *bed, *asJSON)
 	}
 	if len(rest) == 0 {
 		fs.Usage()
@@ -109,4 +121,106 @@ func firstLineOf(s string) string {
 		return truncate(strings.TrimSpace(s[:i]), 60) + " …"
 	}
 	return truncate(strings.TrimSpace(s), 66)
+}
+
+// showSurvival grades the gate on what became of the work it approved.
+func showSurvival(since, mature, bed string, asJSON bool) error {
+	window, err := parseSince(since)
+	if err != nil {
+		return err
+	}
+	hold, err := parseSince(mature)
+	if err != nil {
+		return err
+	}
+	log, err := events.Load()
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	from := time.Time{}
+	if window > 0 {
+		from = now.Add(-window)
+	}
+	landings := survival.Landings(log, from)
+	if bed != "" {
+		var kept []survival.Landing
+		for _, l := range landings {
+			if strings.EqualFold(l.Bed, bed) {
+				kept = append(kept, l)
+			}
+		}
+		landings = kept
+	}
+	facts, unattributed := survival.Look(landings)
+	rep := survival.Grade(landings, facts, now, hold)
+	rep.Window, rep.Unattributed = window, unattributed
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+	if len(rep.Verdicts) == 0 {
+		fmt.Printf("the gate has approved nothing in the last %s\n", since)
+		fmt.Println("\nsurvival is graded from gate.land events, so it can only speak for work")
+		fmt.Println("that landed through the gate rather than by hand.")
+		return nil
+	}
+
+	fmt.Printf("gate survival — landings in the last %s, judged after %s\n\n", since, mature)
+	fmt.Printf("  approved and landed  %4d\n", len(rep.Verdicts))
+	if rep.Young > 0 {
+		fmt.Printf("  too young to judge   %4d\n", rep.Young)
+	}
+	fmt.Printf("  judged               %4d\n", rep.Judged())
+	fmt.Printf("    held               %4d\n", rep.Held)
+	if rep.Reverted > 0 {
+		fmt.Printf("    reverted           %4d\n", rep.Reverted)
+	}
+	if rep.Reopened > 0 {
+		fmt.Printf("    reopened           %4d\n", rep.Reopened)
+	}
+	fmt.Println()
+	if rep.Measurable() {
+		fmt.Printf("  survival rate  %s %s of %d judged\n",
+			bar(rep.Rate(), 10), pct(rep.Rate()), rep.Judged())
+	} else {
+		fmt.Printf("  survival rate  nothing has stood long enough to judge\n")
+	}
+
+	var failed []survival.Verdict
+	for _, v := range rep.Verdicts {
+		if v.Fate == survival.Reverted || v.Fate == survival.Reopened {
+			failed = append(failed, v)
+		}
+	}
+	if len(failed) > 0 {
+		fmt.Println()
+		for _, v := range failed {
+			when := ""
+			if v.Fate == survival.Reverted {
+				when = " after " + lasted(v.Age)
+			}
+			fmt.Printf("  %-18s %s%s  %s\n",
+				truncate(v.Bead, 18), v.Fate, when, truncate(v.Why, 52))
+		}
+	}
+	if rep.Unattributed > 0 {
+		fmt.Printf("\n  %d revert(s) in these repositories name no commit the gate landed,\n", rep.Unattributed)
+		fmt.Println("  and are counted nowhere in the rate above.")
+	}
+	fmt.Println("\n  reporting only: nothing here makes the reviewer stricter or gates a")
+	fmt.Println("  file harder. It says what held, not what to do about it.")
+	return nil
+}
+
+// lasted says how long approved work stood. Days rather than hours, because
+// the question survival asks is measured in the time between landing and
+// finding out, and 480h00m is a number nobody reads as twenty days.
+func lasted(d time.Duration) string {
+	if d < 24*time.Hour {
+		return dur(d)
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }

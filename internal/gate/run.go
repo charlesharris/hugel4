@@ -173,6 +173,11 @@ func Run(o Options) (Report, error) {
 		step(StagePush, false, err.Error(), time.Since(start))
 		return stop("cannot read the merged head")
 	}
+	// What the base was before it moved, so the commits this landing introduced
+	// stay computable later. Without it, all a revert can be matched against is
+	// the one sha recorded here, and a branch of three commits reverted by its
+	// middle one reads as work that survived.
+	base, _ := git(t.Repo, "rev-parse", o.Into)
 	if out, err := git(t.Repo, "update-ref", "refs/heads/"+o.Into, strings.TrimSpace(head)); err != nil {
 		step(StagePush, false, tail(out+err.Error(), 8), time.Since(start))
 		return stop("cannot move " + o.Into + " to the merged head")
@@ -187,8 +192,8 @@ func Run(o Options) (Report, error) {
 	events.Emit(events.Event{
 		Name: "gate.land", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
 		Fields: events.F{
-			"sha": strings.TrimSpace(head), "into": o.Into, "remote": o.Remote,
-			"pushed": o.Remote != "",
+			"sha": strings.TrimSpace(head), "base": strings.TrimSpace(base),
+			"into": o.Into, "remote": o.Remote, "pushed": o.Remote != "",
 		},
 	})
 
