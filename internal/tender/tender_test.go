@@ -2,12 +2,14 @@ package tender
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/charris/hugel/internal/beads"
+	"github.com/charris/hugel/internal/events"
 )
 
 func fixedNow(t *testing.T) time.Time {
@@ -298,4 +300,60 @@ func TestArchiveOnAnUntendedBeadIsNotAnError(t *testing.T) {
 	if err := Archive("never-tended"); err != nil {
 		t.Errorf("Archive = %v, want nothing to do", err)
 	}
+}
+
+// A tender's life has to be reconstructable without reading its worktree,
+// because the worktree is the first thing thrown away when someone tidies up.
+func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Skipf("git unavailable: %s", out)
+	}
+	for _, args := range [][]string{
+		{"-C", repo, "config", "user.email", "t@t"},
+		{"-C", repo, "config", "user.name", "t"},
+		{"-C", repo, "commit", "-q", "--allow-empty", "-m", "root"},
+	} {
+		exec.Command("git", args...).Run()
+	}
+	t.Setenv("HUGEL_AGENT", "/usr/bin/true")
+
+	_, err := Start(Options{
+		Bead: beads.Bead{ID: "x-1", Title: "a bead", Type: "task", Priority: 1,
+			Accept: "it works"},
+		Bed: "bedname", Repo: repo, Soil: "some soil delivered here",
+	})
+	if err != nil {
+		t.Skipf("could not start a tender in this environment: %v", err)
+	}
+
+	log, err := events.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var start *events.Event
+	for i, e := range log {
+		if e.Name == "tender.start" {
+			start = &log[i]
+		}
+	}
+	if start == nil {
+		t.Fatal("no tender.start event")
+	}
+	if start.Bead != "x-1" || start.Bed != "bedname" {
+		t.Errorf("correlation keys lost: %+v", start)
+	}
+	for _, f := range []string{"branch", "worktree", "tmux", "title", "soil_tokens", "has_criteria"} {
+		if _, ok := start.Fields[f]; !ok {
+			t.Errorf("tender.start is missing %q: %v", f, start.Fields)
+		}
+	}
+	if start.Fields["has_criteria"] != true {
+		t.Error("a bead with acceptance criteria was recorded as having none")
+	}
+	if tk, _ := start.Fields["soil_tokens"].(float64); tk <= 0 {
+		t.Errorf("soil_tokens = %v, want what the brief will cost to read", tk)
+	}
+	_ = Stop(Tender{Bead: "x-1", Repo: repo, Worktree: filepath.Join(repo, "nope")}, false)
 }

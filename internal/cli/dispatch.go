@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charris/hugel/internal/beads"
 	"github.com/charris/hugel/internal/config"
+	"github.com/charris/hugel/internal/events"
 	"github.com/charris/hugel/internal/tender"
 	"github.com/charris/hugel/internal/transcript"
 )
@@ -167,6 +169,15 @@ func reap() error {
 }
 
 func handBack(t tender.Tender, note, why string) {
+	// How a tender's life ended, recorded where the rest of it is. Between this
+	// and gate.run, every exit a tender has is on the event log.
+	events.Emit(events.Event{
+		Name: "tender.handback", Bead: t.Bead, Bed: t.Bed, Outcome: why,
+		Duration: time.Since(t.Started),
+		Fields: events.F{
+			"reason": t.Reason(), "worktree": t.Worktree, "branch": t.Branch,
+		},
+	})
 	if err := beads.HandBack(t.Repo, t.Bead, note); err != nil {
 		fmt.Fprintf(os.Stderr, "hugel: %s needs attention but bd could not be told: %v\n", t.Bead, err)
 		return

@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charris/hugel/internal/beads"
+	"github.com/charris/hugel/internal/events"
 )
 
 // Options is what starting a tender needs.
@@ -77,7 +79,8 @@ func Start(o Options) (*Tender, error) {
 	if err := git(o.Repo, "worktree", "add", "-b", t.Branch, t.Worktree); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(t.BriefPath(), []byte(Brief(o, *t)), 0o644); err != nil {
+	brief := Brief(o, *t)
+	if err := os.WriteFile(t.BriefPath(), []byte(brief), 0o644); err != nil {
 		return nil, err
 	}
 	if err := t.save(); err != nil {
@@ -93,10 +96,33 @@ func Start(o Options) (*Tender, error) {
 		t.BriefPath()))
 	if err := tmux(args...); err != nil {
 		_ = git(o.Repo, "worktree", "remove", "--force", t.Worktree)
+		events.Emit(events.Event{
+			Name: "tender.start", Bead: t.Bead, Bed: t.Bed, Outcome: "failed",
+			Fields: events.F{"error": err.Error()},
+		})
 		return nil, err
 	}
+	// Everything known at the moment work begins. A tender's life has to be
+	// reconstructable without reading its worktree, because the worktree is the
+	// first thing thrown away when someone tidies up.
+	events.Emit(events.Event{
+		Name: "tender.start", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
+		Fields: events.F{
+			"title": o.Bead.Title, "type": o.Bead.Type, "priority": o.Bead.Priority,
+			"branch": t.Branch, "worktree": t.Worktree, "tmux": t.Session,
+			"repo": o.Repo, "soil_tokens": tokensIn(o.Soil),
+			"has_criteria": strings.TrimSpace(o.Bead.Accept) != "",
+			"brief_bytes":  len(brief), "skip_permissions": o.SkipPermissions,
+		},
+	})
 	return t, nil
 }
+
+// tokensIn estimates what the soil in a brief will cost the tender to read.
+// Characters over four, the same approximation the budgeter uses: being exactly
+// right would mean asking a tokeniser, which costs more than the answer is
+// worth.
+func tokensIn(s string) int { return (len(s) + 3) / 4 }
 
 func claudeBin() string {
 	if b := os.Getenv("HUGEL_AGENT"); b != "" {
@@ -195,6 +221,11 @@ and write it once.
 // The worktree is kept by default. A run that went wrong is the most useful
 // thing in the garden until someone has read it.
 func Stop(t Tender, removeWorktree bool) error {
+	events.Emit(events.Event{
+		Name: "tender.stop", Bead: t.Bead, Bed: t.Bed, Outcome: t.State(),
+		Duration: time.Since(t.Started),
+		Fields:   events.F{"worktree_removed": removeWorktree, "branch": t.Branch},
+	})
 	if t.Running() {
 		if err := tmux("kill-session", "-t", t.Session); err != nil {
 			return err
