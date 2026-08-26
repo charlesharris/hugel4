@@ -17,7 +17,7 @@ Design constraints, in priority order:
 
 ## Status
 
-Earliest days. Ten commands work.
+Earliest days. Eleven commands work.
 
 ## `hugel yield`
 
@@ -225,6 +225,40 @@ written — because a tender cannot ask whether an entry still holds.
 By default the agent runs with permission prompts bypassed, because a tender
 nobody is watching that stops to ask has not done the work — it has parked in a
 pane. `--ask-permission` turns that off, with the obvious consequence.
+
+## `hugel gate`
+
+Decide whether a tender's work lands.
+
+```
+hugel gate <bead> [--into main] [--remote origin] [--test "make test"]
+hugel gate <bead> --dry-run     everything except merging, pushing and closing
+```
+
+Work, test, review, test, commit. **The second test is not a repetition.** The
+first runs on the tender's branch; the second runs on that branch merged with
+whatever the base has become since the tender started. Work that passed in
+isolation and fails once merged is the ordinary case, and the merged run is the
+only test whose result is true of what gets pushed.
+
+**The reviewer is a separate agent with a different prompt.** The agent that
+wrote the code has every reason to approve it and no way to see what it did not
+think of. The reviewer is told the bead, given the diff, and asked to find the
+difference — and told to change nothing, because naming a problem and repairing
+it are two jobs, and doing both means nobody reviewed the repair.
+
+**A review that states no verdict is a refusal.** A reviewer that rambled,
+crashed, or answered a different question has not approved anything. Treating
+silence as a pass would make the review decorative.
+
+Every stage can refuse, and a refusal leaves everything in place: nothing is
+cleaned up, the bead stays open, the remote does not move. A merge conflict is
+the one exception — the merge is aborted so the worktree stays usable, since a
+half-merged worktree cannot be gated again and the conflict is one command away
+from being reproduced.
+
+A project whose tests hugel cannot find cannot be gated. Discovery never guesses
+its way to a pass: no test command means a refusal, not a skip.
 
 ## `hugel hooks`
 
@@ -436,6 +470,7 @@ internal/draws/       what the pile was asked, and what it handed over
 internal/tend/        the working surface
 internal/beads/       reading work from bd
 internal/tender/      working one bead, unattended, in tmux
+internal/gate/        deciding whether that work lands
 internal/cli/         thin command drivers, no domain logic
 skills/hugel-soil/    the agent-facing way to draw soil
 ```

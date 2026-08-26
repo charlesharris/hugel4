@@ -207,3 +207,11 @@ func Claim(dir, id string) error {
 	_, err := run(dir, "update", id, "--claim")
 	return err
 }
+
+// Close finishes a bead with a stated reason. The reason is not bookkeeping:
+// beads closed with one are what the pile composts, so this is the sentence
+// that becomes knowledge.
+func Close(dir, id, reason string) error {
+	_, err := run(dir, "close", id, "--reason", reason)
+	return err
+}
