@@ -217,3 +217,85 @@ func TestBriefWithoutCriteriaHasNoDoneWhenSection(t *testing.T) {
 		t.Error("an empty criteria section was rendered")
 	}
 }
+
+// A tender that would not say how it went has not said it went well. Reading a
+// missing or vague outcome as "done" would let the gate merge work nobody
+// claimed was finished.
+func TestOutcomeIsReadFromTheTendersOwnAccount(t *testing.T) {
+	cases := map[string]string{
+		"## Outcome\ndone -- all of it":      "done",
+		"## Outcome\n\nblocked, no database": "blocked",
+		"## Outcome\npartial":                "partial",
+		"## Outcome\nit went okay I think":   "unstated",
+		"no headings at all":                 "unstated",
+	}
+	dir := t.TempDir()
+	td := Tender{Bead: "x-1", Worktree: filepath.Join(dir, "bed")}
+	os.MkdirAll(td.Worktree, 0o755)
+	for result, want := range cases {
+		os.WriteFile(td.ResultPath(), []byte(result), 0o644)
+		if got := td.Outcome(); got != want {
+			t.Errorf("Outcome(%q) = %q, want %q", result, got, want)
+		}
+	}
+}
+
+// The reason handed back to a bead is the tender's own words, because a person
+// reading the bead later needs what it said rather than a paraphrase.
+func TestReasonKeepsWhatTheTenderSaid(t *testing.T) {
+	dir := t.TempDir()
+	td := Tender{Bead: "x-1", Worktree: filepath.Join(dir, "bed")}
+	os.MkdirAll(td.Worktree, 0o755)
+	os.WriteFile(td.ResultPath(), []byte(
+		"## Outcome\nblocked -- the bead asks for two incompatible things\n\n"+
+			"## What changed\nnothing\n\n"+
+			"## For the reviewer\nthe schema has no column for this\n"), 0o644)
+
+	got := td.Reason()
+	if !strings.Contains(got, "two incompatible things") {
+		t.Errorf("Reason() = %q, want the outcome", got)
+	}
+	if !strings.Contains(got, "no column for this") {
+		t.Errorf("Reason() = %q, want what it left for a reviewer", got)
+	}
+}
+
+// A bead handed back for correction has to be workable again, or "while that
+// mark stands" means "forever".
+func TestArchiveMakesRoomForASecondAttempt(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	dir, _ := Dir("x-1")
+	if err := os.MkdirAll(filepath.Join(dir, "bed"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "brief.md"), []byte("first attempt"), 0o644)
+
+	if err := Archive("x-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Error("the directory was not moved aside")
+	}
+	// The evidence survives: the second attempt at a bead is when the first is
+	// worth reading.
+	b, err := os.ReadFile(filepath.Join(dir+".1", "brief.md"))
+	if err != nil || string(b) != "first attempt" {
+		t.Errorf("the earlier attempt was lost: %v", err)
+	}
+
+	// A third attempt must not clobber the second.
+	os.MkdirAll(dir, 0o755)
+	if err := Archive("x-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir + ".2"); err != nil {
+		t.Error("a second archive overwrote the first")
+	}
+}
+
+func TestArchiveOnAnUntendedBeadIsNotAnError(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	if err := Archive("never-tended"); err != nil {
+		t.Errorf("Archive = %v, want nothing to do", err)
+	}
+}

@@ -56,23 +56,6 @@ I considered whether to reject the naming but it matches the package.`
 	}
 }
 
-// A tender that reported itself blocked has said the work is not done. The gate
-// believes it rather than reading the diff and deciding otherwise.
-func TestOutcomeIsReadFromTheTendersOwnAccount(t *testing.T) {
-	cases := map[string]string{
-		"## Outcome\ndone -- all of it":      "done",
-		"## Outcome\n\nblocked, no database": "blocked",
-		"## Outcome\npartial":                "partial",
-		"## Outcome\nit went okay I think":   "unstated",
-		"no headings at all":                 "unstated",
-	}
-	for result, want := range cases {
-		if got := outcomeIn(result); got != want {
-			t.Errorf("outcomeIn(%q) = %q, want %q", result, got, want)
-		}
-	}
-}
-
 // hugel cannot gate a project whose tests it cannot find, and must say so
 // rather than pass work nothing checked.
 func TestDiscoverTestNeverGuessesItsWayToAPass(t *testing.T) {

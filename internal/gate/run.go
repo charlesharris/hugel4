@@ -29,12 +29,12 @@ func Run(o Options) (Report, error) {
 	// The tender's own account. A tender that reported itself blocked has said
 	// the work is not done, and the gate believes it rather than reading the
 	// diff and deciding otherwise.
-	result, err := os.ReadFile(t.ResultPath())
+	_, err := os.ReadFile(t.ResultPath())
 	if err != nil {
 		step(StageResult, false, "no result file", 0)
 		return stop("the tender has not finished: no result written")
 	}
-	outcome := outcomeIn(string(result))
+	outcome := t.Outcome()
 	step(StageResult, outcome == "done", outcome, 0)
 	if outcome != "done" {
 		return stop(fmt.Sprintf("the tender reported %q, not done", outcome))
@@ -137,7 +137,7 @@ func Run(o Options) (Report, error) {
 	}
 	step(StagePush, true, pushDetail(o), time.Since(start))
 
-	reason := closeReason(string(result), why)
+	reason := closeReason(t.Reason(), why)
 	if err := beads.Close(t.Repo, t.Bead, reason); err != nil {
 		step(StageClose, false, err.Error(), 0)
 		return stop("landed, but the bead could not be closed: " + err.Error())
@@ -163,53 +163,16 @@ func pushDetail(o Options) string {
 	return "pushed to " + o.Remote + "/" + o.Into
 }
 
-// outcomeIn reads the one word the tender was asked to lead its result with.
-func outcomeIn(result string) string {
-	i := strings.Index(strings.ToLower(result), "## outcome")
-	if i < 0 {
-		return "unstated"
-	}
-	for _, line := range strings.Split(result[i+len("## outcome"):], "\n") {
-		line = strings.TrimSpace(strings.ToLower(line))
-		if line == "" {
-			continue
-		}
-		for _, word := range []string{"done", "partial", "blocked"} {
-			if strings.HasPrefix(line, word) {
-				return word
-			}
-		}
-		return "unstated"
-	}
-	return "unstated"
-}
-
 // closeReason is what the bead records. It is composted afterwards, so it says
 // why rather than that.
-func closeReason(result, reviewWhy string) string {
+func closeReason(tenderSaid, reviewWhy string) string {
 	var b strings.Builder
 	b.WriteString("Tended and reviewed. ")
-	if s := sectionIn(result, "## for the reviewer"); s != "" {
-		b.WriteString(s)
-		b.WriteString(" ")
-	} else if s := sectionIn(result, "## what changed"); s != "" {
-		b.WriteString(s)
-		b.WriteString(" ")
+	if tenderSaid != "" {
+		b.WriteString(tenderSaid + " ")
 	}
 	if reviewWhy != "" {
 		b.WriteString("Review: " + reviewWhy)
 	}
 	return strings.TrimSpace(b.String())
-}
-
-func sectionIn(doc, heading string) string {
-	i := strings.Index(strings.ToLower(doc), heading)
-	if i < 0 {
-		return ""
-	}
-	rest := doc[i+len(heading):]
-	if j := strings.Index(rest, "\n##"); j >= 0 {
-		rest = rest[:j]
-	}
-	return strings.Join(strings.Fields(rest), " ")
 }

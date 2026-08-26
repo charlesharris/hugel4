@@ -225,3 +225,100 @@ func Exists(bead string) bool {
 	_, err := Load(bead)
 	return err == nil
 }
+
+// Outcome is the one word the tender was asked to lead its result with.
+// A result that states none reads as "unstated", which is not "done": a tender
+// that would not say how it went has not said it went well.
+func (t Tender) Outcome() string {
+	b, err := os.ReadFile(t.ResultPath())
+	if err != nil {
+		return ""
+	}
+	return outcomeIn(string(b))
+}
+
+func outcomeIn(result string) string {
+	i := strings.Index(strings.ToLower(result), "## outcome")
+	if i < 0 {
+		return "unstated"
+	}
+	for _, line := range strings.Split(result[i+len("## outcome"):], "\n") {
+		line = strings.TrimSpace(strings.ToLower(line))
+		if line == "" {
+			continue
+		}
+		for _, word := range []string{"done", "partial", "blocked"} {
+			if strings.HasPrefix(line, word) {
+				return word
+			}
+		}
+		return "unstated"
+	}
+	return "unstated"
+}
+
+// Reason is what the tender said about how it went: the outcome section, and
+// whatever it left for a reviewer. This is the text that goes back onto the
+// bead, so it is the tender's own words rather than a summary of them.
+func (t Tender) Reason() string {
+	b, err := os.ReadFile(t.ResultPath())
+	if err != nil {
+		return ""
+	}
+	doc := string(b)
+	parts := []string{}
+	for _, h := range []string{"## outcome", "## for the reviewer"} {
+		if s := sectionIn(doc, h); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, " — ")
+}
+
+func sectionIn(doc, heading string) string {
+	i := strings.Index(strings.ToLower(doc), heading)
+	if i < 0 {
+		return ""
+	}
+	rest := doc[i+len(heading):]
+	if j := strings.Index(rest, "\n##"); j >= 0 {
+		rest = rest[:j]
+	}
+	return strings.Join(strings.Fields(rest), " ")
+}
+
+// Handled reports whether the garden has already acted on this tender's result,
+// so that a repeated dispatch does not hand the same bead back forever.
+func (t Tender) Handled() bool {
+	_, err := os.Stat(t.markPath())
+	return err == nil
+}
+
+// MarkHandled records that a tender's outcome has been acted on.
+func (t Tender) MarkHandled(what string) error {
+	return os.WriteFile(t.markPath(), []byte(what+"\n"), 0o644)
+}
+
+func (t Tender) markPath() string { return filepath.Join(filepath.Dir(t.Worktree), "handled") }
+
+// Archive moves a finished tender aside so a bead can be worked again.
+//
+// The evidence is kept rather than deleted: a run that went wrong is the most
+// useful thing in the garden until somebody has read it, and the second attempt
+// at a bead is exactly when the first one is worth reading. It is renamed
+// rather than removed so the next tender gets a clean directory of its own.
+func Archive(bead string) error {
+	dir, err := Dir(bead)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return nil
+	}
+	for n := 1; ; n++ {
+		aside := fmt.Sprintf("%s.%d", dir, n)
+		if _, err := os.Stat(aside); os.IsNotExist(err) {
+			return os.Rename(dir, aside)
+		}
+	}
+}

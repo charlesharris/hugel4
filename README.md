@@ -301,6 +301,18 @@ A bead already tended once is skipped — two agents on one branch is the
 collision the pool exists to avoid — and epics are skipped, being containers for
 work rather than work.
 
+**Work that stops short comes back to you.** A tender reporting `blocked` has
+not failed — it has found something about the bead. That reason appends to the
+bead in the tender's own words, the bead is released and labelled
+`needs-attention`, and dispatch leaves it alone while the label stands. `bd
+ready` still shows it, because the bead genuinely is ready — for a person. That
+is the arrow that makes this a loop rather than a pipeline: without it the same
+wrong spec is handed to another agent tomorrow.
+
+Clearing the label puts it back in the tender queue. A second attempt gets a
+fresh directory and the first is moved aside rather than deleted, because the
+second attempt at a bead is exactly when the first one is worth reading.
+
 **A tender that dies holding a bead is the failure nothing else notices.** tmux
 doesn't know what the session was for and bd doesn't know its claimant stopped
 existing, so dispatch reaps them: a tender whose agent is gone with no result

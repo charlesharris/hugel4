@@ -28,6 +28,7 @@ type Bead struct {
 	Title    string    `json:"title"`
 	Body     string    `json:"description,omitempty"`
 	Accept   string    `json:"acceptance_criteria,omitempty"`
+	Labels   []string  `json:"labels,omitempty"`
 	Type     string    `json:"issue_type"`
 	Status   string    `json:"status"`
 	Priority int       `json:"priority"`
@@ -38,6 +39,21 @@ type Bead struct {
 	// dependencies, defer dates and gates, and recomputing that here would let
 	// hugel's queue drift from the one tenders actually pull from.
 	Ready bool `json:"-"`
+}
+
+// NeedsAttention is the label for work waiting on a person rather than on an
+// agent. A label rather than a status, because the bead genuinely is ready --
+// for a human. bd ready should still show it; only the tender queue should not.
+const NeedsAttention = "needs-attention"
+
+// Labeled reports whether a bead carries a label.
+func (b Bead) Labeled(name string) bool {
+	for _, l := range b.Labels {
+		if strings.EqualFold(l, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // Blocked reports work that is open but cannot be started. bd stores it as
@@ -237,6 +253,21 @@ func Close(dir, id, reason string) error {
 	return err
 }
 
+// HandBack returns a bead to a person: released from its claim, marked as
+// needing attention, and carrying what the tender learned.
+//
+// One bd invocation so the three cannot half-happen. A bead released without
+// its mark goes straight back to a tender, which hands the same wrong spec to
+// another agent; a bead marked without its reason tells a person it needs them
+// and not why.
+func HandBack(dir, id, reason string) error {
+	_, err := run(dir, "update", id,
+		"--status", "open",
+		"--add-label", NeedsAttention,
+		"--append-notes", reason)
+	return err
+}
+
 // Release puts a claimed bead back in the queue, for when the tender holding it
 // died. Going through bd rather than editing a status hugel keeps means the
 // bead is available to everything else that reads the queue, not just to hugel.
@@ -267,6 +298,11 @@ func Queue(work []*Work, bed string, skip func(id string) bool) []Ready {
 		}
 		for _, b := range w.Beads {
 			if !b.Ready || b.Status == "in_progress" || b.Type == "epic" {
+				continue
+			}
+			// Work waiting on a person is not available to a tender, however
+			// ready bd says it is.
+			if b.Labeled(NeedsAttention) {
 				continue
 			}
 			if skip != nil && skip(b.ID) {

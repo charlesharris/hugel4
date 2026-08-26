@@ -59,8 +59,13 @@ func Start(o Options) (*Tender, error) {
 	if t.Running() {
 		return nil, fmt.Errorf("%s is already being tended in tmux session %s", o.Bead.ID, t.Session)
 	}
+	// A bead worked before gets a fresh directory, and the earlier attempt is
+	// moved aside rather than removed. Refusing outright would mean a bead
+	// handed back for correction could never be tended again.
 	if _, err := os.Stat(t.Worktree); err == nil {
-		return nil, fmt.Errorf("%s already has a worktree at %s; stop it first", o.Bead.ID, t.Worktree)
+		if err := Archive(o.Bead.ID); err != nil {
+			return nil, fmt.Errorf("archive the earlier tender of %s: %w", o.Bead.ID, err)
+		}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("create tender dir: %w", err)

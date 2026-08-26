@@ -51,7 +51,7 @@ flags:
 	}
 	defer unlock()
 
-	if err := reapDead(); err != nil {
+	if err := reap(); err != nil {
 		return err
 	}
 
@@ -83,7 +83,10 @@ flags:
 		fmt.Fprintf(os.Stderr, "hugel: %v\n", p)
 	}
 
-	queue := beads.Queue(work, *bed, tender.Exists)
+	// A bead waiting on a person is not available to a tender, however ready bd
+	// says it is. That is the mark standing, and clearing the label is what
+	// puts the bead back in the queue.
+	queue := beads.Queue(work, *bed, waiting)
 
 	started := 0
 	for _, c := range queue {
@@ -128,47 +131,50 @@ flags:
 	return nil
 }
 
-// reapDead finds tenders whose agent stopped without writing a result and puts
-// their beads back in the queue.
+// reap acts on tenders that will not finish on their own.
 //
-// The worktree is kept. A tender that died is the most informative thing in the
-// garden until somebody has read it, and the bead being available again does
-// not require throwing away the evidence of why it failed the first time.
-func reapDead() error {
-	dead, err := tender.Stopped()
+// Two shapes, one consequence. A tender whose agent died left a bead claimed
+// and a slot spent, and nothing else in the system is watching for it: tmux
+// does not know what the session was for and bd does not know its claimant
+// stopped existing. A tender that finished and said it was blocked left
+// something more useful -- a reason the spec is wrong -- and today that reason
+// goes nowhere while the same spec waits to be handed to the next agent.
+//
+// Both end with the bead back in a person's hands, carrying what was learned.
+func reap() error {
+	all, err := tender.List()
 	if err != nil {
 		return err
 	}
-	for _, t := range dead {
-		if released(t) {
+	for _, t := range all {
+		if t.Handled() {
 			continue
 		}
-		if err := beads.Release(t.Repo, t.Bead); err != nil {
-			fmt.Fprintf(os.Stderr, "hugel: %s died; could not release it: %v\n", t.Bead, err)
-			continue
+		switch {
+		case t.State() == "stopped":
+			handBack(t, "The tender working this died without writing a result. "+
+				"Its worktree is at "+t.Worktree, "died")
+		case t.State() == "finished" && t.Outcome() != "done":
+			// A blocked or partial outcome is a finding about the bead, not a
+			// failure of the tender. The bead is what has to change.
+			// The reason already leads with the outcome word, so naming it
+			// again reads as a stutter on the bead a person will be reading.
+			handBack(t, "A tender stopped short. "+t.Reason()+
+				" Its worktree is at "+t.Worktree, t.Outcome())
 		}
-		if err := markReleased(t); err != nil {
-			fmt.Fprintf(os.Stderr, "hugel: %v\n", err)
-		}
-		fmt.Printf("released  %-16s died without a result; worktree kept at %s\n",
-			t.Bead, t.Worktree)
 	}
 	return nil
 }
 
-// A released tender is marked so that repeated dispatches do not keep releasing
-// the same bead and printing the same line forever.
-func releasedPath(t tender.Tender) string {
-	return filepath.Join(filepath.Dir(t.Worktree), "released")
-}
-
-func released(t tender.Tender) bool {
-	_, err := os.Stat(releasedPath(t))
-	return err == nil
-}
-
-func markReleased(t tender.Tender) error {
-	return os.WriteFile(releasedPath(t), []byte("released after dying without a result\n"), 0o644)
+func handBack(t tender.Tender, note, why string) {
+	if err := beads.HandBack(t.Repo, t.Bead, note); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: %s needs attention but bd could not be told: %v\n", t.Bead, err)
+		return
+	}
+	if err := t.MarkHandled(why); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: %v\n", err)
+	}
+	fmt.Printf("handed back %-16s %s; worktree kept at %s\n", t.Bead, why, t.Worktree)
 }
 
 // lockGarden stops two dispatches racing for the same slot. An exclusive create
@@ -194,4 +200,16 @@ func lockGarden(name string) (func(), error) {
 	fmt.Fprintf(f, "pid %d\n", os.Getpid())
 	f.Close()
 	return func() { os.Remove(path) }, nil
+}
+
+// waiting reports beads a tender should leave alone: work a person owes
+// something to, and work whose last tender has not been dealt with yet.
+func waiting(id string) bool {
+	t, err := tender.Load(id)
+	if err != nil {
+		return false // never tended
+	}
+	// A tender that has been acted on is finished business. The bead may be
+	// tended again once whatever it was handed back for is resolved.
+	return !t.Handled()
 }

@@ -202,3 +202,33 @@ func TestQueueRestrictsToABed(t *testing.T) {
 		t.Errorf("queue = %+v, want only bed b", q)
 	}
 }
+
+// A bead handed back to a person is not available to a tender, however ready
+// bd says it is. Without this the feedback edge is a loop: hand back, pick up,
+// fail the same way, hand back.
+func TestQueueLeavesWorkThatNeedsAPerson(t *testing.T) {
+	w := &Work{Bed: "b", Beads: []Bead{
+		ready("waiting", "", 0, "task", true),
+		ready("free", "", 1, "task", true),
+	}}
+	w.Beads[0].Labels = []string{NeedsAttention}
+
+	q := Queue([]*Work{w}, "", nil)
+	if len(q) != 1 || q[0].Bead.ID != "free" {
+		var got []string
+		for _, r := range q {
+			got = append(got, r.Bead.ID)
+		}
+		t.Errorf("queue = %v, want the marked bead left out", got)
+	}
+}
+
+func TestLabeledIsCaseInsensitive(t *testing.T) {
+	b := Bead{Labels: []string{"Needs-Attention"}}
+	if !b.Labeled(NeedsAttention) {
+		t.Error("a label differing only in case was not recognised")
+	}
+	if b.Labeled("spike") {
+		t.Error("matched a label it does not carry")
+	}
+}
