@@ -30,6 +30,7 @@ hugel yield --all              no time limit
 hugel yield --sessions         one line per session, dearest first
 hugel yield --session ID       request-by-request, to find a spiral
 hugel yield --soil             whether the pile is asked, and whether it was right
+hugel yield --changes          what a landed change cost
 ```
 
 It reads Claude Code's session transcripts from `~/.claude/projects` and writes
@@ -45,6 +46,32 @@ not it is ever used; a subagent that forages in its own context and returns a
 summary pays it on almost nothing.
 
 Context tax above ~85% means the session is mostly paying to remember itself.
+
+### What a change costs
+
+> **Obtain a yield.** Cost per accepted change is visible, always.
+
+That constraint has been stated since the first commit and was not met: `yield`
+had no idea what a change was. `hugel yield --changes` attributes tender and
+reviewer sessions to the bead whose worktree they ran in, and averages over the
+beads that actually landed — dividing by abandoned work would make giving up
+look like efficiency. A bead handed back once and tended again cost twice, and
+attempts are counted per run so that shows.
+
+**These are equivalent API rates, not a bill.** On a subscription nothing here
+was charged per token. The figures measure waste, not money — which is the
+signal worth having either way, since a token spent re-reading a conversation is
+wasted whoever is paying.
+
+**It says what it cannot speak for.** Only tended work can be attributed to a
+bead; interactive sessions produce plenty of accepted change and cannot be tied
+to one. The share of window spend covered is printed beside the total, because a
+report covering a fifth of the window would otherwise read as though it covered
+the window.
+
+Attribution is by path — a tender and the reviewer that gated it run in the same
+worktree, so both land on the same bead without either being told to. That is
+inference; tender lifecycle events would make it a record.
 
 ### Whether any of this works
 

@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/beads"
 	"github.com/charris/hugel/internal/draws"
 	"github.com/charris/hugel/internal/pile"
+	"github.com/charris/hugel/internal/tender"
 	"github.com/charris/hugel/internal/transcript"
 	"github.com/charris/hugel/internal/yield"
 )
@@ -24,6 +26,7 @@ usage:
   hugel yield --sessions                     one line per session, dearest first
   hugel yield --session ID                   request-by-request, to find a spiral
   hugel yield --soil                         whether the pile is asked, and whether it was right
+  hugel yield --changes                      what a landed change cost
 
 flags:
 `)
@@ -37,6 +40,7 @@ flags:
 		session  = fs.String("session", "", "show one session in detail (id prefix is enough)")
 		limit    = fs.Int("limit", 20, "rows to show in list views")
 		soilRep  = fs.Bool("soil", false, "report draws from the pile rather than spend")
+		changes  = fs.Bool("changes", false, "report what each landed bead cost")
 		asJSON   = fs.Bool("json", false, "emit JSON")
 		root     = fs.String("root", "", "transcript root (default ~/.claude/projects)")
 	)
@@ -80,6 +84,9 @@ flags:
 	}
 	if *soilRep {
 		return showSoil(all_, f, *asJSON)
+	}
+	if *changes {
+		return showChanges(all_, f, *asJSON, *limit)
 	}
 
 	rep := yield.Build(all_, f)
@@ -313,4 +320,95 @@ func showSoil(sessions []*transcript.Session, f yield.Filter, asJSON bool) error
 		fmt.Printf("  gone       %d drawn entries are no longer in the pile\n", rep.Missing)
 	}
 	return nil
+}
+
+// showChanges reports what a landed change cost.
+//
+// The design constraint this answers -- obtain a yield, cost per accepted
+// change is visible, always -- has been stated since the first commit and never
+// met, because yield had no idea what a change was.
+//
+// Two honesties are load bearing here. The figures are equivalent API rates and
+// not a bill: on a subscription no token is charged for, so this is a measure of
+// waste rather than of money. And only tended work can be attributed to a bead
+// at all, so the share of spend this speaks for is printed beside it. A report
+// covering a twentieth of the window would otherwise read as though it covered
+// the window.
+func showChanges(sessions []*transcript.Session, f yield.Filter, asJSON bool, limit int) error {
+	attempts, err := gatherAttempts()
+	if err != nil {
+		return err
+	}
+	rep := yield.Changes(sessions, attempts, f)
+
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+	if len(rep.Changes) == 0 {
+		fmt.Println("no tended work in this window")
+		fmt.Println("\ncost per accepted change is measurable only for beads a tender worked;")
+		fmt.Println("interactive sessions produce plenty of accepted change and cannot be")
+		fmt.Println("attributed to one bead.")
+		return nil
+	}
+
+	fmt.Printf("%-18s %-14s %5s %5s %10s %10s  %s\n",
+		"BEAD", "BED", "TRIES", "SESS", "CTX READ", "EQUIV", "LANDED")
+	fmt.Println(strings.Repeat("─", 88))
+	for i, c := range rep.Changes {
+		if limit > 0 && i >= limit {
+			fmt.Printf("… %d more\n", len(rep.Changes)-limit)
+			break
+		}
+		landed := "—"
+		if c.Landed {
+			landed = "yes"
+		}
+		fmt.Printf("%-18s %-14s %5d %5d %10s %10s  %s\n",
+			truncate(c.Bead, 18), truncate(c.Bed, 14), c.Attempts, c.Sessions,
+			tokens(c.Usage.ContextRead()), money(c.Total()), landed)
+	}
+	fmt.Println(strings.Repeat("─", 88))
+
+	fmt.Println()
+	if rep.Landed > 0 {
+		fmt.Printf("  per change  %s across %d landed\n", money(rep.PerChange()), rep.Landed)
+	} else {
+		fmt.Printf("  per change  nothing has landed yet\n")
+	}
+	if rep.Unlanded > 0 {
+		fmt.Printf("  landed none %s across %d beads still open\n", money(rep.UnlandedCost), rep.Unlanded)
+	}
+	fmt.Printf("  covers      %s of %s in this window (%s)\n",
+		money(rep.Attributed), money(rep.Total), pct(rep.Coverage()))
+	fmt.Println("\n  equivalent API rates, not a bill: on a subscription nothing here was")
+	fmt.Println("  charged per token. It measures waste, not money.")
+	return nil
+}
+
+// gatherAttempts reads every tender run the garden has recorded and asks bd
+// whether its bead landed. Archived attempts count: a bead handed back once and
+// tended again cost twice.
+func gatherAttempts() ([]yield.Attempt, error) {
+	all, err := tender.List()
+	if err != nil {
+		return nil, err
+	}
+	landed := map[string]bool{}
+	var out []yield.Attempt
+	for _, t := range all {
+		if _, seen := landed[t.Bead]; !seen {
+			if b, err := beads.Get(t.Repo, t.Bead); err == nil {
+				landed[t.Bead] = b.Status == "closed"
+			} else {
+				landed[t.Bead] = false
+			}
+		}
+		out = append(out, yield.Attempt{
+			Bead: t.Bead, Bed: t.Bed, Worktree: t.Worktree, Landed: landed[t.Bead],
+		})
+	}
+	return out, nil
 }
