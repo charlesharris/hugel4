@@ -356,6 +356,37 @@ why it failed.
 
 Two dispatches cannot race: an exclusive file create is the whole lock.
 
+## Wide events
+
+`~/.hugel/events.jsonl` — one event per unit of work, written at the boundary,
+carrying every field known at that moment.
+
+```json
+{"bead":"hugel4-51v.1","bed":"hugel4","name":"gate.stage","outcome":"ok",
+ "sha":"3286aad","stage":"retest","test":"make test","time":"2026-08-26T22:08:42Z"}
+```
+
+**Counts are derived from events; events are never replaced by counts.** The
+draw log already proves why: it stores the *ids* of the entries a draw
+delivered rather than how many, and that is the only reason draw precision can
+be computed at all. Store the count and the measurement does not exist.
+
+High cardinality is the point rather than a cost to manage — bead, session, sha,
+model, entry ids are exactly the fields a metrics system cannot hold and the
+ones that answer questions nobody thought to ask in advance.
+
+**No SDK, no collector, no service.** Causality in a garden does not cross
+machines, so the bead is the trace id and a flat line is the whole model. Names
+are chosen so translation stays mechanical if these should ever be shipped
+somewhere — `name` to a span name, `time` to `timeUnixNano`, `duration_ms` to
+the extent, `outcome` to a status, `bead` to a trace id, everything else to
+attributes — and nothing depends on that ever happening.
+
+Flat rather than nested, so `jq` reads it without descending into an attributes
+object on every query. Emitting cannot fail its caller: every emitter sits
+inside work that matters more than its own instrumentation, and a log that
+cannot be written loses the event and nothing else.
+
 ## `hugel hooks`
 
 ```
@@ -580,6 +611,7 @@ internal/yield/       accounting and roll-ups
 internal/draws/       what the pile was asked, and what it handed over
 internal/tend/        the working surface
 internal/beads/       reading work from bd
+internal/events/      what the garden did, one wide event at a time
 internal/tender/      working one bead, unattended, in tmux
 internal/gate/        deciding whether that work lands
 internal/cli/         thin command drivers, no domain logic
