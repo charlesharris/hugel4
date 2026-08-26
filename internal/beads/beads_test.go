@@ -86,9 +86,9 @@ func TestCountsSeparateTheThreeStates(t *testing.T) {
 		{Status: "open"},
 		{Status: "closed"},
 	}}
-	ready, active, blocked := w.Counts()
-	if ready != 2 || active != 1 || blocked != 1 {
-		t.Errorf("counts = %d ready, %d active, %d blocked; want 2/1/1", ready, active, blocked)
+	c := w.Counts()
+	if c.Ready != 2 || c.Active != 1 || c.Blocked != 1 {
+		t.Errorf("counts = %+v, want 2 ready, 1 active, 1 blocked", c)
 	}
 }
 
@@ -96,9 +96,9 @@ func TestCountsSeparateTheThreeStates(t *testing.T) {
 // once, not as both active and available for a tender to pick up.
 func TestInProgressIsNotAlsoCountedReady(t *testing.T) {
 	w := Work{Beads: []Bead{{Status: "in_progress", Ready: true}}}
-	ready, active, _ := w.Counts()
-	if ready != 0 || active != 1 {
-		t.Errorf("counts = %d ready, %d active; want 0/1", ready, active)
+	c := w.Counts()
+	if c.Ready != 0 || c.Active != 1 {
+		t.Errorf("counts = %+v, want 0 ready, 1 active", c)
 	}
 }
 
@@ -230,5 +230,35 @@ func TestLabeledIsCaseInsensitive(t *testing.T) {
 	}
 	if b.Labeled("spike") {
 		t.Error("matched a label it does not carry")
+	}
+}
+
+// A bead handed back to a person is still open and bd still calls it ready --
+// ready for a person is exactly what it is. Counting it as ready anyway would
+// report work as available that no tender will ever pick up.
+func TestAttentionOutranksReady(t *testing.T) {
+	w := Work{Beads: []Bead{
+		ready("yours", "", 0, "task", true),
+		ready("free", "", 1, "task", true),
+		ready("running", "", 1, "task", true),
+	}}
+	w.Beads[0].Labels = []string{NeedsAttention}
+	w.Beads[2].Status = "in_progress"
+
+	c := w.Counts()
+	if c.Attention != 1 || c.Ready != 1 || c.Active != 1 {
+		t.Errorf("counts = %+v, want 1 attention, 1 ready, 1 active", c)
+	}
+}
+
+// A bead claimed by a tender that then handed it back is both in_progress in
+// spirit and waiting on a person in fact. The person wins.
+func TestAttentionOutranksEverything(t *testing.T) {
+	w := Work{Beads: []Bead{ready("x", "", 0, "task", false)}}
+	w.Beads[0].Labels = []string{NeedsAttention}
+	w.Beads[0].Status = "in_progress"
+
+	if c := w.Counts(); c.Attention != 1 || c.Active != 0 {
+		t.Errorf("counts = %+v, want it counted as needing a person", c)
 	}
 }

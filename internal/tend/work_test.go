@@ -78,9 +78,9 @@ func TestTotalsAddUpEveryBed(t *testing.T) {
 		work("a", bead("1", "x", "open", true), bead("2", "y", "in_progress", true)),
 		work("b", bead("3", "z", "open", false)),
 	}}
-	ready, active, blocked := g.Totals()
-	if ready != 1 || active != 1 || blocked != 1 {
-		t.Errorf("totals = %d/%d/%d, want 1/1/1", ready, active, blocked)
+	tl := g.Totals()
+	if tl.Ready != 1 || tl.Active != 1 || tl.Blocked != 1 {
+		t.Errorf("totals = %+v, want 1 ready, 1 active, 1 blocked", tl)
 	}
 }
 
@@ -167,4 +167,61 @@ func TestGardenViewShowsBothSides(t *testing.T) {
 		}
 	}
 	t.Logf("\n%s", m.View())
+}
+
+// What you owe comes before what is running, because a tender will pick up
+// ready work unattended and will never pick up work waiting on a person.
+func TestWorkYouOweComesFirst(t *testing.T) {
+	yours := bead("y", "waiting on you", "open", true)
+	yours.Labels = []string{beads.NeedsAttention}
+	g := Garden{Beds: []*beads.Work{work("hugel4",
+		bead("c", "blocked one", "open", false),
+		bead("b", "ready one", "open", true),
+		bead("a", "in flight", "in_progress", true),
+		yours,
+	)}}
+
+	var got []string
+	for _, r := range g.Rows(0) {
+		if r.Kind == Work {
+			got = append(got, r.Bead.ID)
+		}
+	}
+	if len(got) != 4 || got[0] != "y" {
+		t.Errorf("order = %v, want what needs a person first", got)
+	}
+	if got[1] != "a" || got[2] != "b" || got[3] != "c" {
+		t.Errorf("order = %v, want yours, in flight, ready, blocked", got)
+	}
+}
+
+// The reason a bead stopped is the whole point of looking at it, so it comes
+// before the description -- which is what you already knew when you filed it.
+func TestStoppedBeadShowsWhyBeforeWhat(t *testing.T) {
+	b := bead("y", "waiting on you", "open", true)
+	b.Labels = []string{beads.NeedsAttention}
+	b.Notes = "A tender stopped short. blocked -- the schema has no column for this."
+	b.Body = "the description written when it was filed"
+
+	// Joined on spaces: the preview wraps, so asserting on a phrase that
+	// survives a line break is testing the wrapper rather than the ordering.
+	lines := strings.Join(strings.Fields(strings.Join(workDetail(&b, "hugel4", 60), " ")), " ")
+	if !strings.Contains(lines, "no column for this") {
+		t.Fatal("the reason it stopped is not shown")
+	}
+	if !strings.Contains(lines, "needs you") {
+		t.Error("the bead does not say it is waiting on a person")
+	}
+	if strings.Index(lines, "no column for this") > strings.Index(lines, "written when it was filed") {
+		t.Error("the description came before the reason")
+	}
+}
+
+// A bead nobody handed back must not grow an empty reason section.
+func TestOrdinaryBeadHasNoReasonSection(t *testing.T) {
+	b := bead("x", "ordinary", "open", true)
+	b.Body = "a description"
+	if strings.Contains(strings.Join(workDetail(&b, "hugel4", 60), "\n"), "why it stopped") {
+		t.Error("an empty reason section was rendered")
+	}
 }

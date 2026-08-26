@@ -354,13 +354,18 @@ func (m Model) header() string {
 
 	var bits []string
 	if m.panes[m.pane].Name == "work" {
-		ready, active, blocked := m.garden.Totals()
-		if active > 0 {
-			bits = append(bits, fmt.Sprintf("%d in flight", active))
+		t := m.garden.Totals()
+		if t.Attention > 0 {
+			// Leads the header because it is the only count in it that nothing
+			// else in the garden will act on.
+			bits = append(bits, tossed.Render(fmt.Sprintf("%d need you", t.Attention)))
 		}
-		bits = append(bits, fmt.Sprintf("%d ready", ready))
-		if blocked > 0 {
-			bits = append(bits, fmt.Sprintf("%d blocked", blocked))
+		if t.Active > 0 {
+			bits = append(bits, fmt.Sprintf("%d in flight", t.Active))
+		}
+		bits = append(bits, fmt.Sprintf("%d ready", t.Ready))
+		if t.Blocked > 0 {
+			bits = append(bits, fmt.Sprintf("%d blocked", t.Blocked))
 		}
 		bits = append(bits, fmt.Sprintf("%d beds", len(m.garden.Beds)))
 		if n := Unjudged(m.paneRows("knowledge")); n > 0 {

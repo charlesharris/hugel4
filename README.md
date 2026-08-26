@@ -163,8 +163,15 @@ because they are two halves of one sitting: you look at what is in flight, and
 you judge what the last flight left behind. Each pane keeps its place, so a
 glance at one does not cost your position in the other.
 
-Within a bed the order is the question actually being asked — what is
-half-finished and waiting on you, what could be started, what cannot move. Each
+Within a bed the order is the question you sit down asking: **what do I owe**,
+what is running, what could be started, what cannot move. Work waiting on a
+person leads, because it is the only row nothing else in the garden will act on
+— a tender picks up ready work unattended and will never pick up a bead handed
+back to you.
+
+A bead needing attention shows **why it stopped** before it shows what it is.
+The reason is the whole point of looking at it; the description is what you
+already knew when you filed it. Each
 bed caps at `--limit` and says what it left out, so one bed with thirty ready
 beads cannot bury the rest.
 
@@ -518,6 +525,7 @@ wired into live hooks; it keeps the name until it retires.
 ```
 hugel bed kin hugel4 hugel hugel-core    record that these are one project
 hugel bed list                           where each bed lives, and what work is open
+                                         (YOURS is work waiting on a person)
 ```
 
 A bed is named for a working directory, and until now that name was all hugel

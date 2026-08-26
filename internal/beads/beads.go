@@ -29,6 +29,7 @@ type Bead struct {
 	Body     string    `json:"description,omitempty"`
 	Accept   string    `json:"acceptance_criteria,omitempty"`
 	Labels   []string  `json:"labels,omitempty"`
+	Notes    string    `json:"notes,omitempty"`
 	Type     string    `json:"issue_type"`
 	Status   string    `json:"status"`
 	Priority int       `json:"priority"`
@@ -68,19 +69,35 @@ type Work struct {
 	Beads []Bead
 }
 
+// Tally is a bed's open work, by what it is waiting on.
+type Tally struct {
+	Attention int // waiting on a person
+	Active    int // a tender is working it
+	Ready     int // a tender could start it
+	Blocked   int // nothing can start it
+}
+
 // Counts summarises a bed at a glance.
-func (w Work) Counts() (ready, active, blocked int) {
+//
+// Attention takes precedence over everything else. A bead handed back to a
+// person is still open and bd still calls it ready -- ready for a person is
+// exactly what it is -- so counting it as ready would report work as available
+// that no tender will touch.
+func (w Work) Counts() Tally {
+	var t Tally
 	for _, b := range w.Beads {
 		switch {
+		case b.Labeled(NeedsAttention):
+			t.Attention++
 		case b.Status == "in_progress":
-			active++
+			t.Active++
 		case b.Ready:
-			ready++
+			t.Ready++
 		case b.Blocked():
-			blocked++
+			t.Blocked++
 		}
 	}
-	return ready, active, blocked
+	return t
 }
 
 // Read returns the open work in a bd repository.
@@ -207,10 +224,13 @@ func Survey(dirs map[string]string) ([]*Work, []error) {
 		out = append(out, r.w)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		ri, ai, _ := out[i].Counts()
-		rj, aj, _ := out[j].Counts()
-		if ai+ri != aj+rj {
-			return ai+ri > aj+rj
+		a, b := out[i].Counts(), out[j].Counts()
+		// Beds wanting something from a person sort first, then busy beds.
+		if a.Attention != b.Attention {
+			return a.Attention > b.Attention
+		}
+		if a.Active+a.Ready != b.Active+b.Ready {
+			return a.Active+a.Ready > b.Active+b.Ready
 		}
 		return out[i].Bed < out[j].Bed
 	})

@@ -110,13 +110,15 @@ func runBedList(args []string) error {
 	}
 	sort.Strings(names)
 
-	fmt.Printf("%-16s %6s %6s %8s  %-34s %s\n", "BED", "READY", "ACTIVE", "BLOCKED", "WHERE", "ALSO KNOWN AS")
-	fmt.Println(strings.Repeat("─", 100))
+	fmt.Printf("%-16s %5s %6s %6s %8s  %-30s %s\n",
+		"BED", "YOURS", "READY", "ACTIVE", "BLOCKED", "WHERE", "ALSO KNOWN AS")
+	fmt.Println(strings.Repeat("─", 104))
 	for _, n := range names {
-		ready, active, blocked := "—", "—", "—"
+		attn, ready, active, blocked := "—", "—", "—", "—"
 		if w, ok := work[n]; ok {
-			r, a, b := w.Counts()
-			ready, active, blocked = strconv.Itoa(r), strconv.Itoa(a), strconv.Itoa(b)
+			t := w.Counts()
+			attn, ready = strconv.Itoa(t.Attention), strconv.Itoa(t.Ready)
+			active, blocked = strconv.Itoa(t.Active), strconv.Itoa(t.Blocked)
 		}
 		var also string
 		if kin := cfg.KinOf(n); len(kin) > 1 {
@@ -128,8 +130,8 @@ func runBedList(args []string) error {
 			}
 			also = strings.Join(others, ", ")
 		}
-		fmt.Printf("%-16s %6s %6s %8s  %-34s %s\n",
-			truncate(n, 16), ready, active, blocked, truncate(home(dirs[n]), 34), also)
+		fmt.Printf("%-16s %5s %6s %6s %8s  %-30s %s\n",
+			truncate(n, 16), attn, ready, active, blocked, truncate(home(dirs[n]), 30), also)
 	}
 	reportUnlocated(dirs)
 	return nil
