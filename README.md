@@ -212,6 +212,16 @@ own branch and stops: pushing, merging and closing the bead are a reviewer's
 decisions. Claiming goes through bd rather than into a status hugel keeps, so
 the queue a tender pulls from stays the queue everything else reads.
 
+The brief carries **soil**: what the pile already knows about this bead. For a
+tender the pull argument inverts — an interactive session has a person in it who
+notices that prior knowledge would help and asks; a tender has nobody, and the
+bead text is a ready-made query nobody has to write. So soil is pushed here and
+pulled everywhere else, for the same reason in both directions: where the tokens
+land, and who is there to ask for them. `--soil 0` turns it off.
+
+It arrives with its caveat attached — a survey, mostly unreviewed, true when
+written — because a tender cannot ask whether an entry still holds.
+
 By default the agent runs with permission prompts bypassed, because a tender
 nobody is watching that stops to ask has not done the work — it has parked in a
 pane. `--ask-permission` turns that off, with the obvious consequence.

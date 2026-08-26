@@ -161,3 +161,34 @@ func TestDoneFollowsTheResultFile(t *testing.T) {
 		t.Errorf("state = %q, want finished", td.State())
 	}
 }
+
+// For a tender the pull argument inverts: nobody is in the session to notice
+// that prior knowledge would help, and the bead is already a query.
+func TestBriefCarriesSoilWithItsCaveat(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	o.Soil = "## an earlier decision · decision · id abc12345\nthe pooler must stay in session mode"
+	b := Brief(o, td)
+
+	if !strings.Contains(b, "the pooler must stay in session mode") {
+		t.Error("soil did not reach the brief")
+	}
+	if !strings.Contains(b, "What the garden already knows") {
+		t.Error("soil arrived without a heading saying what it is")
+	}
+	// A tender cannot ask whether an entry is still true, so the brief has to
+	// say what soil is worth before the agent acts on it.
+	for _, caveat := range []string{"survey", "unreviewed", "pile show"} {
+		if !strings.Contains(b, caveat) {
+			t.Errorf("brief presents soil without the caveat %q", caveat)
+		}
+	}
+}
+
+// A bead with nothing in the pile about it must produce a brief with no empty
+// section pretending otherwise.
+func TestBriefWithoutSoilHasNoSoilSection(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	if strings.Contains(Brief(o, td), "What the garden already knows") {
+		t.Error("an empty soil section was rendered")
+	}
+}

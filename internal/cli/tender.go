@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/charris/hugel/internal/beads"
+	"github.com/charris/hugel/internal/config"
+	"github.com/charris/hugel/internal/soil"
 	"github.com/charris/hugel/internal/tender"
 	"github.com/charris/hugel/internal/transcript"
 )
@@ -43,6 +45,7 @@ flags:
 		ask   = fs.Bool("ask-permission", false, "let the agent stop and ask; a tender nobody is watching will simply park")
 		extra = fs.String("note", "", "anything else this tender should know")
 		root  = fs.String("root", "", "transcript root (default ~/.claude/projects)")
+		soil  = fs.Int("soil", 1200, "tokens of soil to put in the brief; 0 for none")
 	)
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
@@ -61,10 +64,10 @@ flags:
 		fs.Usage()
 		return fmt.Errorf("need a bead to tend")
 	}
-	return startTender(rest[0], *root, *extra, !*ask)
+	return startTender(rest[0], *root, *extra, !*ask, *soil)
 }
 
-func startTender(bead, root, extra string, skipPermissions bool) error {
+func startTender(bead, root, extra string, skipPermissions bool, budget int) error {
 	dir := root
 	if dir == "" {
 		var err error
@@ -108,6 +111,7 @@ func startTender(bead, root, extra string, skipPermissions bool) error {
 	t, err := tender.Start(tender.Options{
 		Bead: *found, Bed: bed.Bed, Repo: bed.Dir,
 		SkipPermissions: skipPermissions, Extra: extra,
+		Soil: soilFor(*found, bed.Bed, budget),
 	})
 	if err != nil {
 		return err
@@ -195,4 +199,39 @@ func short(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// soilFor draws what the pile knows about a bead.
+//
+// The bead is the query: its title and description are already a statement of
+// what the work is about, written by a person, which is exactly what soil wants
+// and what nobody has to compose. A failed draw costs the tender nothing but
+// the soil -- briefing an agent without prior knowledge is the old behaviour,
+// not a broken one.
+func soilFor(b beads.Bead, bed string, budget int) string {
+	if budget <= 0 {
+		return ""
+	}
+	ix, err := openIndex("")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: no soil for this tender: %v\n", err)
+		return ""
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	drawn := ix.Draw(soil.Query{
+		Text: b.Title + " " + b.Body, Bed: bed, Kin: cfg.KinOf(bed), Budget: budget,
+	})
+	if len(drawn.Items) == 0 {
+		return ""
+	}
+	// The whole bead scores the draw; the title labels it. A description is the
+	// better query -- more words, written by a person -- and the worst possible
+	// heading, since the rendered header quotes it back in full at the top of
+	// the brief the tender is about to read.
+	drawn.Query = b.Title
+	recordDraw(drawn, budget)
+	return drawn.Render()
 }

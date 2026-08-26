@@ -25,6 +25,16 @@ type Options struct {
 	// Extra is appended to the brief: anything the gardener wants this
 	// particular tender to know.
 	Extra string
+
+	// Soil is what the pile already knows about this bead's subject.
+	//
+	// For a tender the pull argument inverts. An interactive session has a
+	// person in it who notices that prior knowledge would help and asks for it;
+	// a tender has nobody, and the bead text is a ready-made query nobody has
+	// to write. So soil is pushed here and pulled everywhere else, for exactly
+	// the same reason in both directions: where the tokens land, and who is
+	// there to ask for them.
+	Soil string
 }
 
 // Start prepares a worktree, writes the brief, and launches an agent in a
@@ -106,6 +116,18 @@ func Brief(o Options, t Tender) string {
 	}
 	if strings.TrimSpace(o.Extra) != "" {
 		fmt.Fprintf(&b, "## Also\n\n%s\n\n", strings.TrimSpace(o.Extra))
+	}
+	if strings.TrimSpace(o.Soil) != "" {
+		fmt.Fprintf(&b, `## What the garden already knows
+
+Drawn from the pile for this bead. It is a survey, not the truth: entries record
+what was true when they were written, most are unreviewed, and some will be
+wrong. Read one in full with "hugel pile show <id>" before relying on it, and
+prefer the code in front of you where they disagree.
+
+%s
+
+`, strings.TrimSpace(o.Soil))
 	}
 
 	fmt.Fprintf(&b, `## Where you are
