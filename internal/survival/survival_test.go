@@ -185,3 +185,28 @@ func TestALandingWithNoRecordedBaseIsStillGradedOnItsOwnSHA(t *testing.T) {
 		t.Errorf("the landed sha itself was reverted and nothing recorded it: %+v", facts)
 	}
 }
+
+// Work filed because of a landing is reported beside it and never counted
+// against it. Plenty of work that held perfectly well turned something up on
+// the way, and treating a follow-up as a failure would grade thoroughness as
+// harm.
+func TestWorkFoundBecauseOfALandingDoesNotCountAgainstIt(t *testing.T) {
+	rep := Grade(
+		[]Landing{{Bead: "quiet", At: at(24 * 20)}, {Bead: "fruitful", At: at(24 * 20)}},
+		map[string]Fact{"fruitful": {Found: []Found{
+			{Bead: "bug-1", Title: "it drops the last row", Type: "bug", Open: true},
+		}}},
+		time.Now(), 7*24*time.Hour)
+
+	if rep.Held != 2 || rep.Rate() != 1 {
+		t.Fatalf("held %d at rate %v, want both landings held", rep.Held, rep.Rate())
+	}
+	// It still leads the report: a landing that held but turned something up is
+	// worth reading before one with nothing to say.
+	if rep.Verdicts[0].Bead != "fruitful" || len(rep.Verdicts[0].Found) != 1 {
+		t.Errorf("report opens with %+v", rep.Verdicts[0])
+	}
+	if len(rep.Verdicts[1].Found) != 0 {
+		t.Errorf("a landing nothing came from carries %v", rep.Verdicts[1].Found)
+	}
+}

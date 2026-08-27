@@ -257,6 +257,25 @@ func Get(dir, id string) (*Bead, error) {
 	return &found[0], nil
 }
 
+// DiscoveredFrom returns the work bd says was found because of this bead.
+//
+// The relation is bd's own and is written by whoever files the follow-up, which
+// is what makes it worth reading: it is somebody stating that this exists
+// because of that, rather than hugel inferring a connection from two beads
+// touching the same files.
+func DiscoveredFrom(dir, id string) ([]Bead, error) {
+	out, err := run(dir, "dep", "list", id, "--direction", "up",
+		"--type", "discovered-from", "--json")
+	if err != nil {
+		return nil, err
+	}
+	var found []Bead
+	if err := json.Unmarshal(out, &found); err != nil {
+		return nil, fmt.Errorf("read what came from %s: %w", id, err)
+	}
+	return found, nil
+}
+
 // Claim marks a bead as being worked, through bd rather than in a status hugel
 // keeps for itself. The queue a tender pulls from has to stay the queue every
 // other reader sees, which is the whole reason hugel does not track work.

@@ -53,6 +53,16 @@ const (
 	Young    Fate = "young"    // landed too recently to have survived anything
 )
 
+// Found is work somebody filed because of a landing. The relation is bd's own
+// and is written by whoever filed the follow-up, which is what makes it worth
+// reading: a person saying this exists because of that.
+type Found struct {
+	Bead  string `json:"bead"`
+	Title string `json:"title"`
+	Type  string `json:"type"`
+	Open  bool   `json:"open"`
+}
+
 // Fact is what the world said about a bead after its work landed. It is
 // gathered by Look and passed in, so that what counts as survival is decided in
 // one place and read in another.
@@ -61,14 +71,21 @@ type Fact struct {
 	RevertedAt time.Time
 	Subject    string // the reverting commit's subject, which usually says why
 	Status     string // the bead's status now; empty when bd could not be asked
+
+	// Found is reported beside a landing and never counted against it. Plenty
+	// of work that held perfectly well turned something up on the way, and a
+	// rate that treated a follow-up as a failure would grade thoroughness as
+	// harm.
+	Found []Found
 }
 
 // Verdict is one landing and what became of it.
 type Verdict struct {
 	Landing
-	Fate Fate
-	Why  string
-	Age  time.Duration // landing to revert, or landing to now
+	Fate  Fate
+	Why   string
+	Age   time.Duration // landing to revert, or landing to now
+	Found []Found       // work filed because of it, reported and not counted
 }
 
 // Report is the gate's record over a window.
@@ -149,7 +166,7 @@ func Grade(landings []Landing, facts map[string]Fact, now time.Time, mature time
 	rep := Report{Mature: mature}
 	for _, l := range landings {
 		f := facts[l.Bead]
-		v := Verdict{Landing: l, Age: now.Sub(l.At)}
+		v := Verdict{Landing: l, Age: now.Sub(l.At), Found: f.Found}
 		switch {
 		case f.RevertedBy != "":
 			v.Fate, v.Why = Reverted, short(f.RevertedBy)+" "+f.Subject
@@ -175,6 +192,11 @@ func Grade(landings []Landing, facts map[string]Fact, now time.Time, mature time
 		a, b := rep.Verdicts[i], rep.Verdicts[j]
 		if rank(a.Fate) != rank(b.Fate) {
 			return rank(a.Fate) < rank(b.Fate)
+		}
+		// A landing that held but turned something up is worth reading before
+		// one that has nothing to say.
+		if (len(a.Found) > 0) != (len(b.Found) > 0) {
+			return len(a.Found) > len(b.Found)
 		}
 		return a.At.After(b.At)
 	})

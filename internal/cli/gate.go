@@ -189,21 +189,32 @@ func showSurvival(since, mature, bed string, asJSON bool) error {
 		fmt.Printf("  survival rate  nothing has stood long enough to judge\n")
 	}
 
-	var failed []survival.Verdict
+	// Every landing with something to say: how it failed, or what was filed
+	// because of it. A landing that held silently is the one row worth nobody's
+	// attention.
+	var told bool
 	for _, v := range rep.Verdicts {
-		if v.Fate == survival.Reverted || v.Fate == survival.Reopened {
-			failed = append(failed, v)
-		}
-	}
-	if len(failed) > 0 {
-		fmt.Println()
-		for _, v := range failed {
-			when := ""
-			if v.Fate == survival.Reverted {
-				when = " after " + lasted(v.Age)
+		say := ""
+		switch v.Fate {
+		case survival.Reverted:
+			say = "reverted after " + lasted(v.Age) + "  " + truncate(v.Why, 44)
+		case survival.Reopened:
+			say = "reopened  " + truncate(v.Why, 44)
+		default:
+			if len(v.Found) == 0 {
+				continue
 			}
-			fmt.Printf("  %-18s %s%s  %s\n",
-				truncate(v.Bead, 18), v.Fate, when, truncate(v.Why, 52))
+			say = string(v.Fate) + "  " + describe(v.Found)
+		}
+		if !told {
+			fmt.Println()
+			told = true
+		}
+		fmt.Printf("  %-18s %s\n", truncate(v.Bead, 18), say)
+		if v.Fate == survival.Reverted || v.Fate == survival.Reopened {
+			if len(v.Found) > 0 {
+				fmt.Printf("  %-18s %s\n", "", describe(v.Found))
+			}
 		}
 	}
 	if rep.Unattributed > 0 {
@@ -213,6 +224,27 @@ func showSurvival(since, mature, bed string, asJSON bool) error {
 	fmt.Println("\n  reporting only: nothing here makes the reviewer stricter or gates a")
 	fmt.Println("  file harder. It says what held, not what to do about it.")
 	return nil
+}
+
+// describe says what was filed because of a landing. Reported beside it and
+// never counted against it: plenty of work that held perfectly well turned
+// something up on the way, and counting a follow-up as a failure would grade
+// thoroughness as harm.
+func describe(found []survival.Found) string {
+	open := 0
+	for _, f := range found {
+		if f.Open {
+			open++
+		}
+	}
+	s := fmt.Sprintf("%d filed against it since", len(found))
+	if open > 0 {
+		s += fmt.Sprintf(", %d still open", open)
+	}
+	if len(found) == 1 {
+		s += ": " + truncate(found[0].Title, 40)
+	}
+	return s
 }
 
 // lasted says how long approved work stood. Days rather than hours, because

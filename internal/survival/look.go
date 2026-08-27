@@ -99,23 +99,40 @@ func Look(landings []Landing) (map[string]Fact, int) {
 			}
 		}
 
-		// Whether the bead came back. A bead the gate closed that is open again
-		// is a person saying the work was not done, which grades the same edge
-		// from the other side.
+		// What bd has to say. Whether the bead came back -- a bead the gate
+		// closed that is open again is a person saying the work was not done,
+		// which grades the same edge from the other side -- and what was filed
+		// because of it, which is reported beside the landing rather than
+		// counted against it.
 		for _, l := range ls {
 			f := facts[l.Bead]
-			if f.Status != "" || f.RevertedBy != "" {
-				continue
+			if f.RevertedBy == "" && f.Status == "" {
+				if b, err := beads.Get(repo, l.Bead); err == nil {
+					f.Status = b.Status
+				}
 			}
-			b, err := beads.Get(repo, l.Bead)
-			if err != nil {
-				continue
+			if f.Found == nil {
+				for _, b := range found(repo, l.Bead) {
+					f.Found = append(f.Found, Found{
+						Bead: b.ID, Title: b.Title, Type: b.Type,
+						Open: b.Status != "closed",
+					})
+				}
 			}
-			f.Status = b.Status
 			facts[l.Bead] = f
 		}
 	}
 	return facts, unattributed
+}
+
+// found asks bd what was filed because of a bead. A tracker that cannot answer
+// costs the answer and nothing else.
+func found(repo, bead string) []beads.Bead {
+	out, err := beads.DiscoveredFrom(repo, bead)
+	if err != nil {
+		return nil
+	}
+	return out
 }
 
 // commit is as much of one as grading needs.
