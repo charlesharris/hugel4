@@ -28,6 +28,7 @@ usage:
   hugel yield --session ID                   request-by-request, to find a spiral
   hugel yield --soil                         whether the pile is asked, and whether it was right
   hugel yield --changes                      what a landed change cost
+  hugel yield --spikes                       whether exploring paid for itself
 
 flags:
 `)
@@ -42,6 +43,7 @@ flags:
 		limit    = fs.Int("limit", 20, "rows to show in list views")
 		soilRep  = fs.Bool("soil", false, "report draws from the pile rather than spend")
 		changes  = fs.Bool("changes", false, "report what each landed bead cost")
+		spikes   = fs.Bool("spikes", false, "report what each spike put in the pile and what came of it")
 		asJSON   = fs.Bool("json", false, "emit JSON")
 		root     = fs.String("root", "", "transcript root (default ~/.claude/projects)")
 	)
@@ -88,6 +90,9 @@ flags:
 	}
 	if *changes {
 		return showChanges(all_, f, *asJSON, *limit)
+	}
+	if *spikes {
+		return showSpikes(f, *asJSON)
 	}
 
 	rep := yield.Build(all_, f)
@@ -321,6 +326,81 @@ func showSoil(sessions []*transcript.Session, f yield.Filter, asJSON bool) error
 		fmt.Printf("  gone       %d drawn entries are no longer in the pile\n", rep.Missing)
 	}
 	return nil
+}
+
+// showSpikes settles the bet each spike was.
+//
+// It reads the same two sources as --soil, the draws log and the pile, and asks
+// a narrower question of them: of the entries this spike produced, how many
+// ever reached anyone, and what did a person make of them.
+func showSpikes(f yield.Filter, asJSON bool) error {
+	log, err := draws.Load()
+	if err != nil {
+		return err
+	}
+	dir, err := pile.DefaultRoot()
+	if err != nil {
+		return err
+	}
+	var entries []*pile.Entry
+	if store, err := pile.Open(dir); err == nil {
+		if entries, err = store.All(); err != nil {
+			return err
+		}
+	}
+
+	rep := yield.Spikes(log, entries, f)
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(rep)
+	}
+	if len(rep.Spikes) == 0 {
+		fmt.Println("no spike has put anything in the pile yet")
+		fmt.Println("\nnothing has been explored, so there is nothing to settle.")
+		return nil
+	}
+
+	fmt.Printf("%-20s %6s %6s %6s %5s %5s  %s\n",
+		"SPIKE", "ENTRIES", "REACHED", "DRAWS", "KEPT", "OUT", "VERDICT")
+	fmt.Println(strings.Repeat("─", 80))
+	var produced, reached, drawn, kept, out int
+	for _, w := range rep.Spikes {
+		fmt.Printf("%-20s %6d %6d %6d %5d %5d  %s\n",
+			truncate(w.Bead, 20), w.Produced, w.Reached, w.Draws,
+			w.Accepted, w.Rejected, w.Verdict())
+		produced += w.Produced
+		reached += w.Reached
+		drawn += w.Draws
+		kept += w.Accepted
+		out += w.Rejected
+	}
+	fmt.Println(strings.Repeat("─", 80))
+	fmt.Printf("%-20s %6d %6d %6d %5d %5d\n", "TOTAL", produced, reached, drawn, kept, out)
+
+	fmt.Printf("\n  %d of %d spikes have visibly paid for themselves\n", paidSpikes(rep), len(rep.Spikes))
+	if produced > reached {
+		fmt.Printf("  %d entries have never been drawn — that much was warmed for a read that has not come\n",
+			produced-reached)
+	}
+	if out > 0 {
+		fmt.Printf("  %d were drawn and thrown out, which costs more than never being drawn:\n", out)
+		fmt.Println("  they also competed in the rankings and pushed better entries down")
+	}
+	if kept+out == 0 {
+		fmt.Println("  nobody has judged any of them yet, so none of this is settled")
+	}
+	return nil
+}
+
+func paidSpikes(rep yield.SpikeReport) int {
+	n := 0
+	for _, w := range rep.Spikes {
+		if w.Paid() {
+			n++
+		}
+	}
+	return n
 }
 
 // showChanges reports what a landed change cost.
