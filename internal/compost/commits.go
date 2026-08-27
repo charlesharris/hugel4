@@ -19,6 +19,13 @@ type Record struct {
 	Body    string `json:"body,omitempty"`
 	Bead    string `json:"bead,omitempty"`
 	Revert  bool   `json:"revert,omitempty"`
+
+	// Files is what the commit actually changed, filled in afterwards by
+	// whoever can reach the repository. A record is parsed out of the message
+	// the agent typed, which says what the change was for and never says where
+	// it landed -- so the paths an entry ends up claiming come from git or come
+	// from nowhere.
+	Files []string `json:"files,omitempty"`
 }
 
 const (

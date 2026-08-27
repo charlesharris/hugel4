@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/charris/hugel/internal/cochange"
 	"github.com/charris/hugel/internal/pile"
 )
 
@@ -59,12 +60,16 @@ func (h Heuristic) Extract(d *Digest) (Harvest, error) {
 			Body:       body,
 			Bed:        d.Bed,
 			Confidence: confidence(r),
-			Paths:      pathsIn(text),
+			Paths:      entryPaths(r, text),
 			Beads:      mergeBeads(r.Bead, beadsIn(text)),
 			OccurredAt: d.End,
 			Evidence: &pile.Evidence{
 				Quote: r.Subject,
-				Files: pathsIn(text),
+				// Evidence is what can be shown. The files the commit changed
+				// when they are known, and otherwise the paths the message
+				// named -- never both, because a list mixing what happened
+				// with what was mentioned cannot be checked against anything.
+				Files: evidenceFiles(r, text),
 			},
 			Source: pile.Source{
 				Session:          d.SessionID,
@@ -137,6 +142,48 @@ func cleanTitle(s string) string {
 
 // pathish matches tokens that look like a file in a repository.
 var pathish = regexp.MustCompile(`\b[\w.\-/]+\.(?:go|rb|js|ts|tsx|py|rs|ex|exs|sql|md|toml|yaml|yml|json|sh|mod)\b|\b(?:internal|cmd|lib|app|src|pkg|test|spec)/[\w.\-/]+`)
+
+// entryPaths says where an entry's work happened.
+//
+// Areas rather than files: coupling is a question about parts of a system, and
+// twelve files in one package is noise where the package is the fact. The files
+// themselves are kept as evidence, which is the place for them.
+//
+// Git wins over prose when both are available. A message names a path when the
+// author thought to mention it, which is a fact about the writing; the commit
+// names every path it touched, which is a fact about the change.
+func entryPaths(r Record, text string) []string {
+	if areas := areasOf(r.Files); len(areas) > 0 {
+		return areas
+	}
+	return pathsIn(text)
+}
+
+// evidenceFiles is what a reader can go and check.
+func evidenceFiles(r Record, text string) []string {
+	if len(r.Files) > 0 {
+		return r.Files
+	}
+	return pathsIn(text)
+}
+
+// areasOf reduces a commit's files to the parts of the tree they live in.
+func areasOf(files []string) []string {
+	if len(files) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, f := range files {
+		d := cochange.Dir(f)
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return capPaths(out)
+}
 
 func pathsIn(s string) []string {
 	var out []string

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -139,6 +140,10 @@ func compostSessions(o compostOpts) error {
 		// transcript: the harness files a session under the directory it ran
 		// in, and for a spike that directory is its worktree.
 		d.Spike = tender.SpikeAt(d.Directory)
+		// Where each commit landed, asked of the repository the session ran
+		// in. A commit record is parsed from the message the agent typed and
+		// carries no paths of its own.
+		compost.ResolveFiles(d, filesBySubject(d.Directory))
 		redacted += redact.Total(d.Redact(scrub))
 		h, err := ex.Extract(d)
 		if err != nil {
@@ -274,4 +279,44 @@ func markComposted() error {
 	defer f.Close()
 	now := time.Now()
 	return os.Chtimes(p, now, now)
+}
+
+// filesBySubject resolves a commit message subject to the files that commit
+// changed, in the repository a session ran in.
+//
+// A unique match or nothing. Two commits can share a subject -- a revert and
+// the thing it reverted very nearly do -- and picking one of them would attach
+// another change's files to this entry, which reads as evidence and is wrong.
+// Returning nothing is the honest answer and the extractor already handles it.
+func filesBySubject(repo string) func(string) []string {
+	if repo == "" {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".git")); err != nil {
+		// Not a repository, or a worktree whose .git file has gone with it.
+		// Composting still works; entries simply keep the paths their prose
+		// named, which is where they were before this.
+		return nil
+	}
+	return func(subject string) []string {
+		subject = strings.TrimSpace(subject)
+		if subject == "" {
+			return nil
+		}
+		out, err := exec.Command("git", "-C", repo, "log", "--all",
+			"--fixed-strings", "--grep="+subject, "--format=%H", "-n", "2").Output()
+		if err != nil {
+			return nil
+		}
+		shas := strings.Fields(string(out))
+		if len(shas) != 1 {
+			return nil
+		}
+		files, err := exec.Command("git", "-C", repo, "show",
+			"--name-only", "--format=", "--no-renames", shas[0]).Output()
+		if err != nil {
+			return nil
+		}
+		return strings.Fields(string(files))
+	}
 }
