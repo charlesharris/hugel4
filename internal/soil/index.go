@@ -39,6 +39,11 @@ type Index struct {
 	df      map[string]int
 	avgLen  float64
 	now     time.Time
+
+	// contradicted is the set of entries something later took back. The edge is
+	// written on the revert and read here, so the entry it falsifies does not
+	// have to be rewritten to lose its standing.
+	contradicted map[string]bool
 }
 
 type doc struct {
@@ -49,7 +54,14 @@ type doc struct {
 // Build indexes entries. Rejected and abandoned entries are dropped here rather
 // than down-weighted: knowledge someone threw away should not surface at all.
 func Build(entries []*pile.Entry, now time.Time) *Index {
-	ix := &Index{df: map[string]int{}, now: now}
+	ix := &Index{df: map[string]int{}, now: now, contradicted: map[string]bool{}}
+	// Links are read before entries are filtered: a revert that was itself
+	// rejected or abandoned still said something about what it took back.
+	for _, e := range entries {
+		for _, id := range e.Contradicted() {
+			ix.contradicted[id] = true
+		}
+	}
 	total := 0
 	for _, e := range entries {
 		if e.Review == pile.Rejected || e.Status == pile.Abandoned {
@@ -251,6 +263,18 @@ func (ix *Index) weight(e *pile.Entry, bed string, kin []string) float64 {
 	}
 	if e.Status == pile.Superseded {
 		w *= 0.4
+	}
+	// Something the garden went back and took out. This is the heaviest penalty
+	// in here, and deliberately heavier than any amount of age: age is a proxy
+	// for wrongness and a poor one -- a two-year-old constraint can be exactly
+	// right and a three-week-old decision can be dead -- while a revert is the
+	// evidence that proxy was standing in for.
+	//
+	// Down-weighted rather than dropped. That a thing was tried and taken back
+	// is what stops the next tender trying it again, which makes it some of the
+	// most useful knowledge in the pile as long as it arrives labelled.
+	if ix.contradicted[e.ID] {
+		w *= 0.2
 	}
 
 	// Confidence is the extractor's own estimate; let it move the ranking a

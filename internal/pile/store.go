@@ -152,6 +152,17 @@ func (s *Store) Put(e *Entry) (Result, error) {
 	return Created, nil
 }
 
+// Has reports whether an entry is in the pile. It is the question a link has to
+// be able to ask before it is written, since an edge to nothing reads as
+// evidence until someone tries to follow it.
+func (s *Store) Has(id string) bool {
+	if err := s.load(); err != nil {
+		return false
+	}
+	_, ok := s.index[id]
+	return ok
+}
+
 // All returns every entry, newest occurrence first.
 func (s *Store) All() ([]*Entry, error) {
 	if err := s.load(); err != nil {

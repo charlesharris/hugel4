@@ -69,8 +69,30 @@ const (
 
 // Link is a typed relation to another entry.
 type Link struct {
-	Rel string `json:"rel"` // evolved_from, supersedes, contradicts, relates_to
+	Rel string `json:"rel"`
 	ID  string `json:"id"`
+}
+
+// The relations an entry can carry. Contradicts is the one the pile earns
+// rather than states: it is written when something the garden did afterwards
+// took an entry back, which is the only evidence in here that does not come
+// from the same session that made the claim.
+const (
+	RelEvolvedFrom = "evolved_from"
+	RelSupersedes  = "supersedes"
+	RelContradicts = "contradicts"
+	RelRelatesTo   = "relates_to"
+)
+
+// Contradicted reports whether this entry says another was taken back.
+func (e *Entry) Contradicted() []string {
+	var out []string
+	for _, l := range e.Links {
+		if l.Rel == RelContradicts && l.ID != "" {
+			out = append(out, l.ID)
+		}
+	}
+	return out
 }
 
 // Git locates an entry in repository history, so a reader can tell whether it

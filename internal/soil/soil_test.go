@@ -208,3 +208,62 @@ func TestRenderSaysWhenThePileKnowsNothing(t *testing.T) {
 		t.Errorf("render = %q", s.Render())
 	}
 }
+
+func ids(ms []Match) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.Entry.ID
+	}
+	return out
+}
+
+// The acceptance the bead was filed against: a contradicted entry has to sink
+// further than an old one. Age is a proxy for wrongness and a poor one -- a
+// three-year-old decision can be exactly right -- and a revert is the evidence
+// that proxy was standing in for.
+func TestAContradictedEntrySinksBelowAnOldOne(t *testing.T) {
+	old := e("b", "indexing with a graph", "the index is a graph",
+		func(x *pile.Entry) { x.ID = "old-1"; x.OccurredAt = now.AddDate(-3, 0, 0) })
+	taken := e("b", "indexing with a graph", "the index is a graph",
+		func(x *pile.Entry) { x.ID = "taken-1" })
+	revert := e("b", "Revert \"indexing with a graph\"", "it did not survive contact",
+		func(x *pile.Entry) {
+			x.ID, x.Type = "revert-1", pile.Failure
+			x.Links = []pile.Link{{Rel: pile.RelContradicts, ID: "taken-1"}}
+		})
+
+	ix := Build([]*pile.Entry{old, taken, revert}, now)
+	got := ids(ix.Search(Query{Text: "indexing graph index", Bed: "b"}))
+
+	var oldAt, takenAt = -1, -1
+	for i, id := range got {
+		switch id {
+		case "old-1":
+			oldAt = i
+		case "taken-1":
+			takenAt = i
+		}
+	}
+	if takenAt < 0 {
+		t.Fatalf("the contradicted entry vanished: %v", got)
+	}
+	if oldAt < 0 || oldAt > takenAt {
+		t.Errorf("ranked %v; three years of age outranked a revert", got)
+	}
+}
+
+// A revert that was itself thrown away still said something about what it took
+// back, so the edge is read before entries are filtered.
+func TestAnEdgeFromARejectedRevertStillCounts(t *testing.T) {
+	taken := e("b", "indexing with a graph", "the index is a graph",
+		func(x *pile.Entry) { x.ID = "taken-1" })
+	revert := e("b", "Revert \"indexing with a graph\"", "gone",
+		func(x *pile.Entry) {
+			x.ID, x.Type, x.Review = "revert-1", pile.Failure, pile.Rejected
+			x.Links = []pile.Link{{Rel: pile.RelContradicts, ID: "taken-1"}}
+		})
+	ix := Build([]*pile.Entry{taken, revert}, now)
+	if !ix.contradicted["taken-1"] {
+		t.Error("the edge was dropped with the entry that carried it")
+	}
+}

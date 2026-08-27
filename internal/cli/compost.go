@@ -124,6 +124,7 @@ func compostSessions(o compostOpts) error {
 	var (
 		counts    = map[pile.Result]int{}
 		proposed  int
+		linked    int
 		redacted  int
 		cost      float64
 		anyChange bool
@@ -140,6 +141,16 @@ func compostSessions(o compostOpts) error {
 		}
 		cost += h.CostUSD
 		proposed += len(h.Entries)
+		// A revert is the pile's only evidence from outside the session that
+		// made the claim: the garden went back and took the change out.
+		linked += compost.LinkReverts(h.Entries, func(id string) bool {
+			for _, e := range h.Entries {
+				if e.Identity() == id {
+					return true
+				}
+			}
+			return store != nil && store.Has(id)
+		})
 
 		var wrote []string
 		for _, e := range h.Entries {
@@ -173,6 +184,9 @@ func compostSessions(o compostOpts) error {
 		ex.Name(), ex.Version(), proposed, money(cost))
 	if redacted > 0 {
 		fmt.Fprintf(out, "redacted %d credentials before extraction\n", redacted)
+	}
+	if linked > 0 {
+		fmt.Fprintf(out, "linked %d revert(s) to the decision they took back\n", linked)
 	}
 	if o.dry || store == nil {
 		return nil
