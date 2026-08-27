@@ -491,3 +491,30 @@ func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
 		t.Errorf("soil_tokens = %v, want what the brief will cost to read", tk)
 	}
 }
+
+// A criterion only the reviewer knows about is a trap: the tender builds
+// something, the review refuses it, and the two of them disagree about a
+// standard only one of them was ever shown.
+func TestATenderIsToldTheStandardItWillBeJudgedAgainst(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	b := Brief(o, td)
+	if !strings.Contains(b, "## Observability") {
+		t.Error("the tender brief does not carry the convention the review will hold it to")
+	}
+	if !strings.Contains(b, "One event per unit") {
+		t.Error("the tender brief names the section but not the standard")
+	}
+	if !strings.Contains(b, "Nothing to instrument is a fine answer") {
+		t.Error("the tender is not told when the convention does not apply, so it will pad changes with events")
+	}
+}
+
+// A spike writes no code, so a convention about what code should emit is at
+// best noise in its brief and at worst an invitation to write some.
+func TestASpikeIsNotToldToInstrumentAnything(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	o.Spike = true
+	if strings.Contains(Brief(o, td), "## Observability") {
+		t.Error("a spike was given a convention about code it is forbidden to write")
+	}
+}

@@ -2,6 +2,7 @@ package gate
 
 import (
 	"fmt"
+	"github.com/charris/hugel/internal/events"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,11 +135,12 @@ means nobody reviewed the repair.
 // existed and were withheld, and a reviewer that invents a standard is back to
 // answering "is this good work".
 func acceptSection(accept string) string {
+	standing := "\n### Standing\n\n" + events.Criterion + "\n"
 	if strings.TrimSpace(accept) == "" {
-		return "\n## Acceptance criteria\n\nThe bead states none. Judge it against what the bead asks for, and say in\nyour findings that it shipped without criteria.\n"
+		return "\n## Acceptance criteria\n\nThe bead states none of its own. Judge it against what the bead asks for, and\nsay in your findings that it shipped without criteria. The standing criterion\nbelow still applies.\n" + standing
 	}
 	return "\n## Acceptance criteria\n\nThis is what the work was promised to do. Answer against it.\n\n" +
-		strings.TrimSpace(accept) + "\n"
+		strings.TrimSpace(accept) + "\n" + standing
 }
 
 const defaultBase = "main"

@@ -171,6 +171,14 @@ func Brief(o Options, t Tender) string {
 		fmt.Fprintf(&b, "## Done when\n\n%s\n\nThe review will be answered against exactly this, one item at a time.\n\n",
 			strings.TrimSpace(o.Bead.Accept))
 	}
+	// The standard the review will hold this to, shown to the tender before it
+	// starts. A criterion only the reviewer knows about is a trap: the tender
+	// builds something, the reviewer refuses it, and the two of them disagree
+	// about a standard only one of them was ever told.
+	if !o.Spike {
+		fmt.Fprintf(&b, "## Observability\n\n%s\n\nThe review answers this as a standing criterion, alongside any above.\n\n",
+			events.Convention)
+	}
 	if strings.TrimSpace(o.Extra) != "" {
 		fmt.Fprintf(&b, "## Also\n\n%s\n\n", strings.TrimSpace(o.Extra))
 	}

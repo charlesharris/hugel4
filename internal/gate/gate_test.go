@@ -371,3 +371,36 @@ func TestNoReviewEventWhenTheGateStopsFirst(t *testing.T) {
 		}
 	}
 }
+
+// The criterion is standing: it holds whether or not the bead states criteria
+// of its own, because a convention that depends on the gardener remembering to
+// write it into each bead is a convention that holds until they are busy.
+func TestEveryReviewCarriesTheObservabilityCriterion(t *testing.T) {
+	td := tender.Tender{Bead: "x-1", Title: "a bead", Worktree: t.TempDir()}
+	for _, accept := range []string{"", "the pooler stays in session mode"} {
+		b := ReviewBrief(td, accept, "")
+		if !strings.Contains(b, "wide structured event") {
+			t.Errorf("review brief with accept=%q does not carry the standing criterion", accept)
+		}
+		if !strings.Contains(b, "Standing") {
+			t.Errorf("review brief with accept=%q does not mark it as standing", accept)
+		}
+	}
+	// The bead's own criteria must survive alongside it, not be replaced by it.
+	b := ReviewBrief(td, "the pooler stays in session mode", "")
+	if !strings.Contains(b, "the pooler stays in session mode") {
+		t.Error("the standing criterion displaced the bead's own")
+	}
+}
+
+// A criterion that fails every documentation change is noise, and noise gets
+// switched off. The reviewer has to be told the shape of a pass that makes no
+// claim about instrumentation.
+func TestTheCriterionSaysWhenItDoesNotApply(t *testing.T) {
+	b := strings.ToLower(ReviewBrief(tender.Tender{Bead: "x-1", Worktree: t.TempDir()}, "", ""))
+	for _, want := range []string{"nothing to instrument", "refactors", "both are passes"} {
+		if !strings.Contains(b, want) {
+			t.Errorf("the standing criterion never says %q, so it will fail changes it should pass", want)
+		}
+	}
+}
