@@ -69,13 +69,18 @@ type Trouble struct {
 
 // Digest is the bounded, model-ready account of one session.
 type Digest struct {
-	SessionID string        `json:"session_id"`
-	Bed       string        `json:"bed"`
-	Directory string        `json:"directory"`
-	Branch    string        `json:"branch"`
-	Start     time.Time     `json:"start"`
-	End       time.Time     `json:"end"`
-	Duration  time.Duration `json:"duration"`
+	SessionID string `json:"session_id"`
+	Bed       string `json:"bed"`
+	Directory string `json:"directory"`
+
+	// Spike is the bead this session was exploring, when the session was a
+	// spike. Filled by whoever knows -- the digest itself only sees a
+	// directory, and what that directory was for lives with the tenders.
+	Spike    string        `json:"spike,omitempty"`
+	Branch   string        `json:"branch"`
+	Start    time.Time     `json:"start"`
+	End      time.Time     `json:"end"`
+	Duration time.Duration `json:"duration"`
 
 	Asks  []string `json:"asks"`
 	Notes []string `json:"notes"`

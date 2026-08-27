@@ -151,6 +151,7 @@ func runPileList(args []string) error {
 	root := fs.String("pile", "", "pile location (default ~/.hugel/pile)")
 	bed := fs.String("bed", "", "restrict to one bed")
 	kind := fs.String("type", "", "restrict to one type")
+	spike := fs.String("spike", "", "only what one spike found; \"any\" for every spike's findings")
 	limit := fs.Int("limit", 30, "rows to show")
 	stats := fs.Bool("stats", false, "summarise instead of listing")
 	if err := fs.Parse(args); err != nil {
@@ -177,11 +178,35 @@ func runPileList(args []string) error {
 		if *kind != "" && string(e.Type) != *kind {
 			continue
 		}
+		// "any" answers the question a reader usually has first -- what has
+		// exploring actually produced -- which no single bead id can.
+		if *spike == "any" && e.Source.Spike == "" {
+			continue
+		}
+		if *spike != "" && *spike != "any" && e.Source.Spike != *spike {
+			continue
+		}
 		shown = append(shown, e)
 	}
 
 	if *stats {
 		return pileStats(shown)
+	}
+	if *spike != "" {
+		fmt.Printf("%-16s %-11s %-16s %-10s  %s\n", "ID", "TYPE", "SPIKE", "WHEN", "TITLE")
+		fmt.Println(strings.Repeat("─", 100))
+		for i, e := range shown {
+			if *limit > 0 && i >= *limit {
+				fmt.Printf("… %d more\n", len(shown)-*limit)
+				break
+			}
+			fmt.Printf("%-16s %-11s %-16s %-10s  %s\n",
+				e.ID, e.Type, truncate(e.Source.Spike, 16),
+				e.OccurredAt.Format("2006-01-02"), truncate(e.Title, 44))
+		}
+		fmt.Println(strings.Repeat("─", 100))
+		fmt.Printf("%d entries\n", len(shown))
+		return nil
 	}
 	fmt.Printf("%-16s %-11s %-8s %-10s  %s\n", "ID", "TYPE", "SCOPE", "WHEN", "TITLE")
 	fmt.Println(strings.Repeat("─", 100))

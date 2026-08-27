@@ -72,6 +72,7 @@ func (h Heuristic) Extract(d *Digest) (Harvest, error) {
 				Extractor:        h.Name(),
 				ExtractorVersion: h.Version(),
 				Redactions:       d.Redactions,
+				Spike:            d.Spike,
 			},
 		}
 		if d.Branch != "" {

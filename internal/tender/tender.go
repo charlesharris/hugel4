@@ -165,6 +165,33 @@ func Load(bead string) (*Tender, error) {
 	return nil, fmt.Errorf("no tender for %s", bead)
 }
 
+// SpikeAt names the spike that worked in a directory, if one did.
+//
+// A spike's session is recorded by the harness under the directory it ran in,
+// which is its worktree -- so the worktree is the only join between a
+// transcript and the bead it was exploring. Nothing else survives: the tmux
+// session is gone by the time anyone composts, and the transcript records a
+// path rather than a bead.
+//
+// An ordinary tender's worktree answers empty. Only a spike's findings are
+// attributed, because only a spike's product is the finding itself.
+func SpikeAt(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	all, err := List()
+	if err != nil {
+		return ""
+	}
+	want := filepath.Clean(dir)
+	for _, t := range all {
+		if t.Spike && filepath.Clean(t.Worktree) == want {
+			return t.Bead
+		}
+	}
+	return ""
+}
+
 var errNoTmux = errors.New("tmux is not installed")
 
 func tmux(args ...string) error {

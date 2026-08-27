@@ -136,3 +136,48 @@ func TestDigestSHAIsStableAndInputSpecific(t *testing.T) {
 		t.Error("different digests hashed the same")
 	}
 }
+
+// An entry found by exploring carries different authority from one earned by
+// changing something and watching it hold. Without the spike on the entry, the
+// difference is invisible to a reader and unqueryable to anyone asking whether
+// spiking paid for itself.
+func TestFindingsCarryTheSpikeThatFoundThem(t *testing.T) {
+	d := digestWith(Record{
+		Kind:    KindMemory,
+		Subject: "the extractor only reads commit messages",
+		Body:    "a session that ends without a commit composts to nothing.",
+	})
+	d.Spike = "hugel4-4q6.1"
+
+	h, err := Heuristic{}.Extract(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(h.Entries) == 0 {
+		t.Fatal("no entries")
+	}
+	for _, e := range h.Entries {
+		if e.Source.Spike != "hugel4-4q6.1" {
+			t.Errorf("entry %q lost the spike that produced it: %+v", e.Title, e.Source)
+		}
+	}
+}
+
+// Ordinary work is not a spike, and must not be labelled as one -- an entry
+// falsely marked as a finding would be read as weaker evidence than it is.
+func TestOrdinaryWorkNamesNoSpike(t *testing.T) {
+	d := digestWith(Record{
+		Kind:    KindCommit,
+		Subject: "drive: separate the parsers from the ioctls so the tree builds anywhere",
+		Body:    "internal/drive kept its pure parsers beside the syscalls.",
+	})
+	h, err := Heuristic{}.Extract(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range h.Entries {
+		if e.Source.Spike != "" {
+			t.Errorf("entry %q claims spike %q", e.Title, e.Source.Spike)
+		}
+	}
+}

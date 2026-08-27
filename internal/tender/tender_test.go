@@ -174,6 +174,49 @@ func TestASpikeIsStillASpikeAfterARoundTrip(t *testing.T) {
 	}
 }
 
+// The worktree is the only join between a composted transcript and the bead it
+// was exploring: the harness files a session under the directory it ran in, the
+// tmux session is gone by compost time, and the transcript records a path
+// rather than a bead. If this lookup misses, findings arrive in the pile
+// anonymous and nobody can ask what spiking produced.
+func TestFindingsAreTracedBackByWorktree(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	dir, err := Dir("hugel4-spike")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, sp := sample(dir)
+	sp.Bead, sp.Spike = "hugel4-spike", true
+	if err := sp.save(); err != nil {
+		t.Fatal(err)
+	}
+
+	workDir, err := Dir("hugel4-work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, work := sample(workDir)
+	work.Bead = "hugel4-work"
+	if err := work.save(); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := SpikeAt(sp.Worktree); got != "hugel4-spike" {
+		t.Errorf("SpikeAt(the spike's worktree) = %q, want its bead", got)
+	}
+	// An ordinary tender's findings are not a spike's. Attributing them would
+	// overstate what exploring produced and understate what the work did.
+	if got := SpikeAt(work.Worktree); got != "" {
+		t.Errorf("SpikeAt(a tender's worktree) = %q, want empty", got)
+	}
+	for _, dir := range []string{"", "/somewhere/nobody/tended"} {
+		if got := SpikeAt(dir); got != "" {
+			t.Errorf("SpikeAt(%q) = %q, want empty", dir, got)
+		}
+	}
+}
+
 func TestSaveAndListRoundTrip(t *testing.T) {
 	garden := t.TempDir()
 	t.Setenv("HUGEL_HOME", garden)

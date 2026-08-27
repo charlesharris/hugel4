@@ -124,6 +124,13 @@ type Source struct {
 	CostUSD          float64      `json:"cost_usd"`
 	Redactions       []redact.Hit `json:"redactions,omitempty"`
 	ImportedFrom     string       `json:"imported_from,omitempty"`
+
+	// Spike is the bead of the exploration that produced this entry, when one
+	// did. An entry found by looking carries different authority from one
+	// earned by changing something and watching it hold, and a reader deserves
+	// to know which is in front of them. It is also the join that makes
+	// "was spiking worth it" a query rather than a feeling.
+	Spike string `json:"spike,omitempty"`
 }
 
 // Entry is one piece of composted knowledge.

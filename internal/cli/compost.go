@@ -14,6 +14,7 @@ import (
 	"github.com/charris/hugel/internal/config"
 	"github.com/charris/hugel/internal/pile"
 	"github.com/charris/hugel/internal/redact"
+	"github.com/charris/hugel/internal/tender"
 	"github.com/charris/hugel/internal/transcript"
 )
 
@@ -134,6 +135,10 @@ func compostSessions(o compostOpts) error {
 
 	for _, s := range chosen {
 		d := compost.Distil(s, budget)
+		// What the session was for lives with the tenders, not in the
+		// transcript: the harness files a session under the directory it ran
+		// in, and for a spike that directory is its worktree.
+		d.Spike = tender.SpikeAt(d.Directory)
 		redacted += redact.Total(d.Redact(scrub))
 		h, err := ex.Extract(d)
 		if err != nil {
