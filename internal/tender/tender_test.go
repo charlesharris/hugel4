@@ -302,6 +302,19 @@ func TestArchiveOnAnUntendedBeadIsNotAnError(t *testing.T) {
 	}
 }
 
+// tmux resolves an empty target to the current session, so a Tender that never
+// got a session name would answer these questions about whoever asked them --
+// and Stop would kill the caller's own session. Both must decline to ask.
+func TestATenderWithNoSessionIsNotRunning(t *testing.T) {
+	var nameless Tender
+	if nameless.Running() {
+		t.Error("a tender with no session name reported itself running; tmux answered for the current session")
+	}
+	if err := Stop(nameless, false); err != nil {
+		t.Errorf("Stop on a nameless tender: %v", err)
+	}
+}
+
 // A tender's life has to be reconstructable without reading its worktree,
 // because the worktree is the first thing thrown away when someone tidies up.
 func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
@@ -319,7 +332,7 @@ func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
 	}
 	t.Setenv("HUGEL_AGENT", "/usr/bin/true")
 
-	_, err := Start(Options{
+	started, err := Start(Options{
 		Bead: beads.Bead{ID: "x-1", Title: "a bead", Type: "task", Priority: 1,
 			Accept: "it works"},
 		Bed: "bedname", Repo: repo, Soil: "some soil delivered here",
@@ -327,6 +340,7 @@ func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
 	if err != nil {
 		t.Skipf("could not start a tender in this environment: %v", err)
 	}
+	t.Cleanup(func() { _ = Stop(*started, false) })
 
 	log, err := events.Load()
 	if err != nil {
@@ -355,5 +369,4 @@ func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
 	if tk, _ := start.Fields["soil_tokens"].(float64); tk <= 0 {
 		t.Errorf("soil_tokens = %v, want what the brief will cost to read", tk)
 	}
-	_ = Stop(Tender{Bead: "x-1", Repo: repo, Worktree: filepath.Join(repo, "nope")}, false)
 }

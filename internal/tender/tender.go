@@ -35,6 +35,7 @@ type Tender struct {
 	Worktree string    `json:"worktree"`
 	Branch   string    `json:"branch"`
 	Session  string    `json:"tmux_session"`
+	Spike    bool      `json:"spike,omitempty"`
 	Started  time.Time `json:"started"`
 }
 
@@ -62,7 +63,15 @@ func (t Tender) Done() bool {
 }
 
 // Running reports whether the tmux session is still alive.
+//
+// A tender with no session name is not running. The guard matters more than it
+// looks: tmux reads an empty target as "no target given" and resolves it to the
+// current session, so asking about a half-built Tender would answer for the
+// session doing the asking -- and Stop would then kill it.
 func (t Tender) Running() bool {
+	if t.Session == "" {
+		return false
+	}
 	return exec.Command("tmux", "has-session", "-t", t.Session).Run() == nil
 }
 
