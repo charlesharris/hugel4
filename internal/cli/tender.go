@@ -171,16 +171,64 @@ func listTenders() error {
 		fmt.Println("nothing has been tended yet")
 		return nil
 	}
+	// Read the transcripts once for the whole list. A working tender is the
+	// only one whose progress is news -- a finished one has written a result,
+	// which says more than any reading of its session could.
+	var sessions []*transcript.Session
+	if anyWorking(all) {
+		if dir, err := transcript.DefaultRoot(); err == nil {
+			sessions, _, _ = transcript.LoadAll(dir)
+		}
+	}
+
 	fmt.Printf("%-18s %-10s %8s  %-16s %s\n", "BEAD", "STATE", "ELAPSED", "BED", "TITLE")
 	fmt.Println(strings.Repeat("─", 92))
 	for _, t := range all {
 		fmt.Printf("%-18s %-10s %8s  %-16s %s\n",
 			truncate(t.Bead, 18), t.State(), short(time.Since(t.Started)),
 			truncate(t.Bed, 16), truncate(t.Title, 34))
+		if t.State() != "working" {
+			continue
+		}
+		p, ok := tender.ProgressOf(t, sessions)
+		if !ok || p.Turns == 0 {
+			fmt.Printf("%18s   ↳ nothing on the transcript yet\n", "")
+			continue
+		}
+		fmt.Printf("%18s   ↳ %s\n", "", progressLine(p))
 	}
 	fmt.Println(strings.Repeat("─", 92))
 	fmt.Println("hugel tender --show <bead> for the brief and result")
 	return nil
+}
+
+func anyWorking(all []tender.Tender) bool {
+	for _, t := range all {
+		if t.State() == "working" {
+			return true
+		}
+	}
+	return false
+}
+
+// progressLine says what a tender has been doing in one line.
+//
+// Trouble is named rather than counted into the rest because it is the part
+// worth acting on: a tender racking up failing commands is the case this
+// report exists to catch before the bill does.
+func progressLine(p tender.Progress) string {
+	parts := []string{fmt.Sprintf("%d turns", p.Turns)}
+	if p.Files > 0 {
+		parts = append(parts, fmt.Sprintf("%d files", p.Files))
+	}
+	if p.Trouble > 0 {
+		parts = append(parts, fmt.Sprintf("%d failing", p.Trouble))
+	}
+	line := strings.Join(parts, ", ")
+	if p.Doing != "" {
+		line += fmt.Sprintf("; %s ago: %s", short(p.Idle()), truncate(p.Doing, 44))
+	}
+	return line
 }
 
 func showTender(bead string) error {
