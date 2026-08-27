@@ -24,6 +24,7 @@ usage:
   hugel garden            where the work is, across every bed
   hugel tend              judge what the garden did
   hugel tender <bead>     work one bead, unattended, in tmux
+  hugel spike <bead>      explore a question; records findings, writes no code
   hugel gate <bead>       test, review, test again, then land it
   hugel dispatch          fill the tender slots from the ready queue
   hugel hooks <name>      what the harness runs on hugel's behalf
@@ -56,6 +57,8 @@ func Run(args []string) error {
 		return runTend(args[1:])
 	case "tender":
 		return runTender(args[1:])
+	case "spike":
+		return runSpike(args[1:])
 	case "gate":
 		return runGate(args[1:])
 	case "dispatch":

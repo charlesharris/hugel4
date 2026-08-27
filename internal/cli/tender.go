@@ -38,14 +38,15 @@ flags:
 		fs.PrintDefaults()
 	}
 	var (
-		list  = fs.Bool("list", false, "what is being tended")
-		show  = fs.String("show", "", "print a tender's brief and result")
-		stop  = fs.String("stop", "", "end a tender")
-		clean = fs.Bool("clean", false, "with --stop, remove the worktree too")
-		ask   = fs.Bool("ask-permission", false, "let the agent stop and ask; a tender nobody is watching will simply park")
-		extra = fs.String("note", "", "anything else this tender should know")
-		root  = fs.String("root", "", "transcript root (default ~/.claude/projects)")
-		soil  = fs.Int("soil", 1200, "tokens of soil to put in the brief; 0 for none")
+		list   = fs.Bool("list", false, "what is being tended")
+		show   = fs.String("show", "", "print a tender's brief and result")
+		stop   = fs.String("stop", "", "end a tender")
+		clean  = fs.Bool("clean", false, "with --stop, remove the worktree too")
+		ask    = fs.Bool("ask-permission", false, "let the agent stop and ask; a tender nobody is watching will simply park")
+		attach = fs.Bool("attach", false, "a person will sit in the pane; the brief tells it to ask rather than guess")
+		extra  = fs.String("note", "", "anything else this tender should know")
+		root   = fs.String("root", "", "transcript root (default ~/.claude/projects)")
+		soil   = fs.Int("soil", 1200, "tokens of soil to put in the brief; 0 for none")
 	)
 	rest, err := parseInterleaved(fs, args)
 	if err != nil {
@@ -64,11 +65,30 @@ flags:
 		fs.Usage()
 		return fmt.Errorf("need a bead to tend")
 	}
-	return startTender(rest[0], *root, *extra, !*ask, *soil)
+	return startTender(startOptions{
+		Bead: rest[0], Root: *root, Extra: *extra,
+		SkipPermissions: !*ask, Attach: *attach, Budget: *soil,
+	})
 }
 
-func startTender(bead, root, extra string, skipPermissions bool, budget int) error {
-	dir := root
+// startOptions is what the gardener chose, before hugel has found the bead.
+//
+// A struct rather than a parameter list because spike and tender differ by two
+// booleans out of six: positionally they would be one transposition away from
+// briefing an agent as the wrong kind of thing, and the compiler would not say.
+type startOptions struct {
+	Bead            string
+	Root            string
+	Extra           string
+	SkipPermissions bool
+	Attach          bool
+	Spike           bool
+	Budget          int
+}
+
+func startTender(o startOptions) error {
+	bead := o.Bead
+	dir := o.Root
 	if dir == "" {
 		var err error
 		if dir, err = transcript.DefaultRoot(); err != nil {
@@ -110,8 +130,9 @@ func startTender(bead, root, extra string, skipPermissions bool, budget int) err
 
 	t, err := tender.Start(tender.Options{
 		Bead: *found, Bed: bed.Bed, Repo: bed.Dir,
-		SkipPermissions: skipPermissions, Extra: extra,
-		Soil: soilFor(*found, bed.Bed, budget),
+		SkipPermissions: o.SkipPermissions, Extra: o.Extra,
+		Spike: o.Spike, Attach: o.Attach,
+		Soil: soilFor(*found, bed.Bed, o.Budget),
 	})
 	if err != nil {
 		return err
@@ -122,12 +143,20 @@ func startTender(bead, root, extra string, skipPermissions bool, budget int) err
 		fmt.Fprintf(os.Stderr, "hugel: %s started but not claimed in bd: %v\n", found.ID, err)
 	}
 
-	fmt.Printf("tending %s  %s\n", t.Bead, truncate(t.Title, 58))
+	verb := "tending"
+	if o.Spike {
+		verb = "spiking"
+	}
+	fmt.Printf("%s %s  %s\n", verb, t.Bead, truncate(t.Title, 58))
 	fmt.Printf("  worktree  %s\n", t.Worktree)
-	fmt.Printf("  branch    %s\n", t.Branch)
+	// A spike's branch is where it is standing, not where its work will arrive:
+	// it commits nothing, so printing the branch would promise a diff to review.
+	if !o.Spike {
+		fmt.Printf("  branch    %s\n", t.Branch)
+	}
 	fmt.Printf("  brief     %s\n", t.BriefPath())
 	fmt.Printf("  watch     %s\n", t.Attach())
-	if !skipPermissions {
+	if !o.SkipPermissions && !o.Attach {
 		fmt.Println("\nrunning with permission prompts on: if it asks, nobody is there to answer.")
 	}
 	return nil

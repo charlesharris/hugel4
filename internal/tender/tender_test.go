@@ -88,6 +88,61 @@ func TestBriefForbidsTheReviewersDecisions(t *testing.T) {
 	}
 }
 
+// A spike is judged on what it recorded, so its brief has to ask for that and
+// withhold everything a tender is asked for. The two failure modes are a spike
+// that leaves a diff and a spike that saves its findings for an end it never
+// reaches; the brief has to speak to both.
+func TestSpikeBriefAsksForFindingsAndForbidsCode(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	o.Spike = true
+	b := Brief(o, td)
+	for _, want := range []string{
+		"You are a spike", "bd remember", "As you go, not at the end", td.Worktree, td.ResultPath(),
+		"Do not write code", "Do not close the bead",
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("spike brief is missing %q", want)
+		}
+	}
+	// The tender's instructions are the spike's prohibitions. If any of these
+	// survive into a spike brief it has been told to do the work it exists to
+	// avoid doing.
+	for _, unwanted := range []string{
+		"Commit to this branch", "Run the project's tests", td.Branch,
+	} {
+		if strings.Contains(b, unwanted) {
+			t.Errorf("spike brief still carries the tender's %q", unwanted)
+		}
+	}
+}
+
+// Whether anyone is in the pane decides whether asking is diligence or
+// parking, so it has to reach both kinds of brief and say opposite things.
+func TestWhoIsWatchingReachesEveryBrief(t *testing.T) {
+	for _, spike := range []bool{false, true} {
+		kind := "tender"
+		if spike {
+			kind = "spike"
+		}
+		o, td := sample("/garden/tenders/x")
+		o.Spike = spike
+
+		o.Attach = false
+		if un := Brief(o, td); !strings.Contains(un, "Nobody is watching") {
+			t.Errorf("unattended %s brief does not say nobody is watching", kind)
+		}
+
+		o.Attach = true
+		at := Brief(o, td)
+		if !strings.Contains(at, "Somebody is attached") {
+			t.Errorf("attached %s brief does not say somebody is attached", kind)
+		}
+		if strings.Contains(at, "Nobody is watching") {
+			t.Errorf("attached %s brief still tells it nobody is watching", kind)
+		}
+	}
+}
+
 func TestBriefCarriesAnExtraNote(t *testing.T) {
 	o, td := sample("/garden/tenders/x")
 	o.Extra = "the pooler must stay in session mode"
@@ -358,7 +413,7 @@ func TestStartRecordsEverythingKnownAtTheStart(t *testing.T) {
 	if start.Bead != "x-1" || start.Bed != "bedname" {
 		t.Errorf("correlation keys lost: %+v", start)
 	}
-	for _, f := range []string{"branch", "worktree", "tmux", "title", "soil_tokens", "has_criteria"} {
+	for _, f := range []string{"branch", "worktree", "tmux", "title", "soil_tokens", "has_criteria", "spike"} {
 		if _, ok := start.Fields[f]; !ok {
 			t.Errorf("tender.start is missing %q: %v", f, start.Fields)
 		}

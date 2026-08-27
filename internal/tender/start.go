@@ -28,6 +28,18 @@ type Options struct {
 	// particular tender to know.
 	Extra string
 
+	// Spike explores instead of building. Its product is knowledge -- findings
+	// recorded with bd remember as it goes -- and it leaves no diff behind.
+	//
+	// The same machinery as a tender because the difference is the brief, not
+	// the mechanism: a worktree, a detached session, a file at each end.
+	Spike bool
+
+	// Attach means a person will be sitting in the pane. It changes one thing
+	// in the brief and it is the thing that matters most: whether asking a
+	// question is the right move or a way of parking forever.
+	Attach bool
+
 	// Soil is what the pile already knows about this bead's subject.
 	//
 	// For a tender the pull argument inverts. An interactive session has a
@@ -52,7 +64,7 @@ func Start(o Options) (*Tender, error) {
 		return nil, err
 	}
 	t := &Tender{
-		Bead: o.Bead.ID, Bed: o.Bed, Title: o.Bead.Title, Repo: o.Repo,
+		Bead: o.Bead.ID, Bed: o.Bed, Title: o.Bead.Title, Repo: o.Repo, Spike: o.Spike,
 		Worktree: worktreeIn(dir, o.Bed),
 		Branch:   "hugel/" + o.Bead.ID,
 		Session:  sessionName(o.Bead.ID),
@@ -91,9 +103,15 @@ func Start(o Options) (*Tender, error) {
 	if o.SkipPermissions {
 		args = append(args, "--dangerously-skip-permissions")
 	}
-	args = append(args, fmt.Sprintf(
+	prompt := fmt.Sprintf(
 		"Read %s and carry out the work it describes. Work autonomously: do not wait for confirmation.",
-		t.BriefPath()))
+		t.BriefPath())
+	if o.Spike {
+		prompt = fmt.Sprintf(
+			"Read %s and carry out the exploration it describes. Record what you find as you go; write no code.",
+			t.BriefPath())
+	}
+	args = append(args, prompt)
 	if err := tmux(args...); err != nil {
 		_ = git(o.Repo, "worktree", "remove", "--force", t.Worktree)
 		events.Emit(events.Event{
@@ -110,7 +128,7 @@ func Start(o Options) (*Tender, error) {
 		Fields: events.F{
 			"title": o.Bead.Title, "type": o.Bead.Type, "priority": o.Bead.Priority,
 			"branch": t.Branch, "worktree": t.Worktree, "tmux": t.Session,
-			"repo": o.Repo, "soil_tokens": tokensIn(o.Soil),
+			"repo": o.Repo, "soil_tokens": tokensIn(o.Soil), "spike": o.Spike,
 			"has_criteria": strings.TrimSpace(o.Bead.Accept) != "",
 			"brief_bytes":  len(brief), "skip_permissions": o.SkipPermissions,
 		},
@@ -169,11 +187,33 @@ prefer the code in front of you where they disagree.
 `, strings.TrimSpace(o.Soil))
 	}
 
-	fmt.Fprintf(&b, `## Where you are
+	if o.Spike {
+		spikeBrief(&b, o, t)
+	} else {
+		tenderBrief(&b, o, t)
+	}
+	return b.String()
+}
 
-You are a tender: an agent working one bead of a garden, unattended, in a git
-worktree of its own at %s, on branch %s. Nobody is watching the pane. Work
-through the bead and do not wait for confirmation.
+// watching says who is in the pane, which decides whether a question is the
+// right move or a way of parking forever. It is the one line that changes
+// between an unattended run and an attached one, and it changes everything
+// about how the agent should behave when it is unsure.
+func watching(attach bool) string {
+	if attach {
+		return `Somebody is attached to this pane and can answer you. Ask early rather than
+guessing: a question costs a minute and a wrong assumption costs the run.`
+	}
+	return `Nobody is watching the pane. Work through it and do not wait for
+confirmation -- an agent that stops to ask, unattended, has not done the work,
+it has parked.`
+}
+
+func tenderBrief(b *strings.Builder, o Options, t Tender) {
+	fmt.Fprintf(b, `## Where you are
+
+You are a tender: an agent working one bead of a garden, in a git worktree of
+its own at %s, on branch %s. %s
 
 ## What to do
 
@@ -213,8 +253,66 @@ Write %s as markdown, with these sections:
 
 Writing that file is how the garden learns you have finished, so write it last
 and write it once.
-`, t.Worktree, t.Branch, t.ResultPath(), t.Branch, t.ResultPath())
-	return b.String()
+`, t.Worktree, t.Branch, watching(o.Attach), t.ResultPath(), t.Branch, t.ResultPath())
+}
+
+// spikeBrief asks for knowledge instead of code.
+//
+// The findings go out through bd remember one at a time, as they are found. A
+// spike that saves its recording for the end loses everything it learned if it
+// runs out of room first, which is the failure a spike exists to prevent rather
+// than reproduce.
+func spikeBrief(b *strings.Builder, o Options, t Tender) {
+	fmt.Fprintf(b, `## Where you are
+
+You are a spike: an agent sent to find something out before anyone builds on
+it. You have a git worktree of your own at %s. %s
+
+Nothing you write here will be kept. There is no review and no merge, and the
+worktree is thrown away. What survives this session is what you record.
+
+## What to do
+
+1. Read whatever answers the question: the code, the history, the tests, the
+   tools the project already uses. Follow what you actually find rather than a
+   plan made before you started.
+2. Record each finding the moment you have it, one per call, on one line:
+
+       bd remember "the extractor only reads commit messages, so a session that ends without a commit composts to nothing"
+
+   As you go, not at the end. A spike that saves its recording for last loses
+   everything it learned if it runs out of room first, which is the failure
+   this exists to prevent.
+3. State findings as what is true, not as what you did. "The gate's second test
+   runs on the merged tree" is a finding. "Looked at the gate" is not, and will
+   be composted into the pile as though it were.
+4. Write your result to %s when you are done.
+
+## What not to do
+
+- Do not write code. No edits, no new files, no commits. A spike that leaves a
+  diff has done the next bead's work badly instead of its own work well.
+- Do not close the bead, and do not start the work this is exploring for.
+- Do not work outside this worktree. Other agents are working elsewhere.
+- Do not edit the brief.
+
+## The result file
+
+Write %s as markdown, with these sections:
+
+    ## Outcome
+    done | partial | blocked   -- one word, then a sentence saying why
+
+    ## What you found
+    each finding, in the order you found them
+
+    ## What is still unknown
+    what you could not answer, and what it would take to answer it
+
+Writing that file is how the garden learns you have finished, so write it last
+and write it once. The findings themselves are already recorded; this says what
+the exploration came to.
+`, t.Worktree, watching(o.Attach), t.ResultPath(), t.ResultPath())
 }
 
 // Stop ends a tender: the tmux session, and optionally the worktree with it.
