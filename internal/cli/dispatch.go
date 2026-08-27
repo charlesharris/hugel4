@@ -102,7 +102,7 @@ flags:
 		}
 		t, err := tender.Start(tender.Options{
 			Bead: c.Bead, Bed: c.Work.Bed, Repo: c.Work.Dir,
-			SkipPermissions: !*ask, Soil: soilFor(c.Bead, c.Work.Bed, *soil),
+			SkipPermissions: !*ask, Soil: soilFor(c.Bead, c.Work.Bed, c.Work.Dir, *soil),
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "hugel: %s not started: %v\n", c.Bead.ID, err)

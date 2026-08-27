@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charris/hugel/internal/beads"
+	"github.com/charris/hugel/internal/cochange"
 	"github.com/charris/hugel/internal/config"
 	"github.com/charris/hugel/internal/soil"
 	"github.com/charris/hugel/internal/tender"
@@ -132,7 +133,7 @@ func startTender(o startOptions) error {
 		Bead: *found, Bed: bed.Bed, Repo: bed.Dir,
 		SkipPermissions: o.SkipPermissions, Extra: o.Extra,
 		Spike: o.Spike, Attach: o.Attach,
-		Soil: soilFor(*found, bed.Bed, o.Budget),
+		Soil: soilFor(*found, bed.Bed, bed.Dir, o.Budget),
 	})
 	if err != nil {
 		return err
@@ -285,7 +286,7 @@ func short(d time.Duration) string {
 // and what nobody has to compose. A failed draw costs the tender nothing but
 // the soil -- briefing an agent without prior knowledge is the old behaviour,
 // not a broken one.
-func soilFor(b beads.Bead, bed string, budget int) string {
+func soilFor(b beads.Bead, bed, repo string, budget int) string {
 	if budget <= 0 {
 		return ""
 	}
@@ -298,8 +299,12 @@ func soilFor(b beads.Bead, bed string, budget int) string {
 	if err != nil {
 		return ""
 	}
+	// What else in this project bears on the work, read from the project's own
+	// history. A bead names no paths, so this is the only statement of
+	// structure available at the moment a tender is briefed.
 	drawn := ix.Draw(soil.Query{
 		Text: b.Title + " " + b.Body, Bed: bed, Kin: cfg.KinOf(bed), Budget: budget,
+		Coupling: cochange.Of(repo),
 	})
 	if len(drawn.Items) == 0 {
 		return ""

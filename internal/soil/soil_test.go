@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charris/hugel/internal/cochange"
 	"github.com/charris/hugel/internal/pile"
 )
 
@@ -265,5 +266,113 @@ func TestAnEdgeFromARejectedRevertStillCounts(t *testing.T) {
 	ix := Build([]*pile.Entry{taken, revert}, now)
 	if !ix.contradicted["taken-1"] {
 		t.Error("the edge was dropped with the entry that carried it")
+	}
+}
+
+// Coupling answers the question word overlap cannot: what else bears on this.
+// The entry that never mentions the query's words still gets a hearing when the
+// project's own history says its part of the tree moves with the part the query
+// is about.
+func TestCouplingLiftsANeighbourOverANearTie(t *testing.T) {
+	seed := e("hugel4", "the pooler stays in session mode", "pooler pooler session")
+	seed.ID = "seed000000000000"
+	seed.Paths = []string{"internal/api"}
+
+	// Two entries that match the query equally weakly. One is in a part of the
+	// tree that moves with the seed's; the other is not.
+	near := e("hugel4", "connection limits in the store", "pooler")
+	near.ID = "near000000000000"
+	near.Paths = []string{"internal/store/conn.go"}
+
+	far := e("hugel4", "icon sizing in the viewer", "pooler")
+	far.ID = "far0000000000000"
+	far.Paths = []string{"internal/ui/icons.go"}
+
+	ix := Build([]*pile.Entry{seed, near, far}, now)
+	q := Query{Text: "pooler session mode", Bed: "hugel4", Limit: 5}
+
+	scoreOf := func(ms []Match, id string) float64 {
+		for _, m := range ms {
+			if m.Entry.ID == id {
+				return m.Score
+			}
+		}
+		return 0
+	}
+	plain := ix.Search(q)
+	q.Coupling = cochange.Coupling{
+		"internal/api":   {"internal/store": 1.0},
+		"internal/store": {"internal/api": 1.0},
+	}
+	coupled := ix.Search(q)
+
+	if got, was := scoreOf(coupled, near.ID), scoreOf(plain, near.ID); got <= was {
+		t.Errorf("the coupled neighbour scored %.4f, was %.4f -- coupling did not lift it", got, was)
+	}
+	if got, was := scoreOf(coupled, far.ID), scoreOf(plain, far.ID); got != was {
+		t.Errorf("an entry coupled to nothing was re-scored: %.4f -> %.4f", was, got)
+	}
+	// And the lift is a nudge, not an override: it must not outrank the entry
+	// that actually matched the words.
+	if scoreOf(coupled, near.ID) > scoreOf(coupled, seed.ID) {
+		t.Error("coupling floated a neighbour above the entry the query actually matched")
+	}
+}
+
+// The acceptance criterion in its own right: a project whose history says
+// nothing draws exactly what it drew before. A ranking signal that cannot be
+// switched off is one nobody can trust.
+func TestADrawWithoutCouplingIsUnchanged(t *testing.T) {
+	entries := []*pile.Entry{
+		e("hugel4", "the pooler stays in session mode", "pooler session"),
+		e("hugel4", "connection limits in the store", "pooler limits"),
+		e("hugel4", "icon sizing in the viewer", "pooler icons"),
+	}
+	for i, x := range entries {
+		x.ID = strings.Repeat(string(rune('a'+i)), 16)
+		x.Paths = []string{"internal/pkg" + string(rune('a'+i))}
+	}
+	ix := Build(entries, now)
+	q := Query{Text: "pooler session", Bed: "hugel4", Limit: 5}
+
+	before := titles(ix.Search(q))
+	q.Coupling = nil
+	after := titles(ix.Search(q))
+	if len(before) != len(after) {
+		t.Fatalf("different number of results: %v vs %v", before, after)
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			t.Errorf("order changed with no coupling: %v vs %v", before, after)
+		}
+	}
+	// An empty coupling is the same promise as no coupling at all.
+	q.Coupling = cochange.Coupling{}
+	if got := titles(ix.Search(q)); len(got) != len(before) || got[0] != before[0] {
+		t.Errorf("an empty coupling changed the draw: %v vs %v", got, before)
+	}
+}
+
+// Rewarding the seeds again would amplify word overlap under a new name. The
+// bonus is for what the query did not think to ask about.
+func TestCouplingDoesNotRewardTheSeedsAgain(t *testing.T) {
+	a := e("hugel4", "the pooler stays in session mode", "pooler session")
+	a.ID = "aaaa000000000000"
+	a.Paths = []string{"internal/api/pool.go"}
+	b := e("hugel4", "pooler timeouts", "pooler session")
+	b.ID = "bbbb000000000000"
+	b.Paths = []string{"internal/api/timeout.go"}
+
+	ix := Build([]*pile.Entry{a, b}, now)
+	q := Query{Text: "pooler session", Bed: "hugel4", Limit: 5}
+	plain := ix.Search(q)
+	q.Coupling = cochange.Coupling{"internal/api": {"internal/api": 1.0}}
+	coupled := ix.Search(q)
+
+	for i := range plain {
+		if plain[i].Score != coupled[i].Score {
+			t.Errorf("%q was re-scored for coupling to its own area: %v -> %v",
+				plain[i].Entry.Title, plain[i].Score, coupled[i].Score)
+		}
 	}
 }

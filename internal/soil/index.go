@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/charris/hugel/internal/cochange"
 	"github.com/charris/hugel/internal/pile"
 )
 
@@ -178,6 +179,12 @@ type Query struct {
 	// budget. Soil is a survey of what the pile knows; reading an entry in full
 	// is a second, deliberate step.
 	Snippet int
+
+	// Coupling says which parts of the project change together, derived from
+	// git at draw time. It answers the question word overlap cannot: what else
+	// bears on this. Absent, the draw is exactly what it was before -- the
+	// bonus is a nudge for near-ties and never a substitute for relevance.
+	Coupling cochange.Coupling
 }
 
 // Match is one entry the pile offered, and why.
@@ -224,16 +231,98 @@ func (ix *Index) Search(q Query) []Match {
 		}
 		matches = append(matches, Match{Entry: e, Score: s})
 	}
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].Score != matches[j].Score {
-			return matches[i].Score > matches[j].Score
-		}
-		return matches[i].Entry.OccurredAt.After(matches[j].Entry.OccurredAt)
-	})
+	byScore := func(m []Match) {
+		sort.Slice(m, func(i, j int) bool {
+			if m[i].Score != m[j].Score {
+				return m[i].Score > m[j].Score
+			}
+			return m[i].Entry.OccurredAt.After(m[j].Entry.OccurredAt)
+		})
+	}
+	byScore(matches)
+	// Coupling is applied to everything that matched, before the list is cut
+	// down. Applying it after would only ever reorder entries that had already
+	// won, which is the one place it has nothing to add.
+	if applyCoupling(matches, q.Coupling) {
+		byScore(matches)
+	}
 	if len(matches) > q.Limit {
 		matches = matches[:q.Limit]
 	}
 	return matches
+}
+
+// How far a dependency may move a ranking.
+const (
+	// maxSeeds bounds how many matches stand for "what the query is about".
+	// The query itself names no paths -- a bead is a sentence, not a diff -- so
+	// the best available statement of its subject is the entries that already
+	// matched it on wording.
+	maxSeeds = 3
+	// couplingBonus is deliberately small. Word overlap remains the signal and
+	// this is a nudge: at full coupling it lifts an entry by a sixth, enough to
+	// settle a near-tie in favour of the neighbour that actually bears on the
+	// work, and never enough to float something irrelevant.
+	couplingBonus = 0.16
+)
+
+// applyCoupling lifts matches whose code areas change together with the areas
+// the strongest matches are about, and reports whether it moved anything.
+//
+// This is the reader the pile has never had. Edge types have existed in the
+// schema since it was built and nothing ever consumed one, which is why nothing
+// ever wrote one. A weight is the cheapest reader that changes an outcome, and
+// it composes with the ranking instead of competing with it.
+func applyCoupling(matches []Match, c cochange.Coupling) bool {
+	if c == nil || len(matches) < 2 {
+		return false
+	}
+	// The subject is stated by the strongest matches; the lift is for what
+	// ranked below them. A share rather than a fixed count, so a draw that
+	// returned three entries does not make all three the subject and leave
+	// nothing to lift -- with few matches only the top one speaks for the
+	// query.
+	seeds := len(matches) / 3
+	if seeds < 1 {
+		seeds = 1
+	}
+	if seeds > maxSeeds {
+		seeds = maxSeeds
+	}
+	areas := map[string]bool{}
+	for _, m := range matches[:seeds] {
+		for _, p := range m.Entry.Paths {
+			if d := cochange.Dir(p); d != "" {
+				areas[d] = true
+			}
+		}
+	}
+	if len(areas) == 0 {
+		return false
+	}
+	moved := false
+	for i := seeds; i < len(matches); i++ {
+		best := 0.0
+		for _, p := range matches[i].Entry.Paths {
+			d := cochange.Dir(p)
+			if d == "" {
+				continue
+			}
+			for seed := range areas {
+				// Score answers 0 for an area against itself, so an entry in
+				// the subject's own area is not rewarded for being there --
+				// that would amplify word overlap under another name.
+				if s := c.Score(d, seed); s > best {
+					best = s
+				}
+			}
+		}
+		if best > 0 {
+			matches[i].Score *= 1 + couplingBonus*best
+			moved = true
+		}
+	}
+	return moved
 }
 
 // weight adjusts relevance by provenance, trust, and age.

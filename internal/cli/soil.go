@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charris/hugel/internal/cochange"
 	"github.com/charris/hugel/internal/config"
 	"github.com/charris/hugel/internal/draws"
 	"github.com/charris/hugel/internal/pile"
@@ -60,9 +61,14 @@ flags:
 	if err != nil {
 		return err
 	}
+	// Drawn where the gardener is standing: coupling is a fact about the
+	// project in front of them, and the working directory is which project
+	// that is.
+	repo, _ := os.Getwd()
 	s := ix.Draw(soil.Query{
 		Text: strings.Join(words, " "), Bed: *bed, Kin: cfg.KinOf(*bed),
 		Type: pile.Type(*kind), Limit: *limit, Budget: *budget,
+		Coupling: cochange.Of(repo),
 	})
 	recordDraw(s, *budget)
 	if *asJSON {
