@@ -26,6 +26,7 @@ import (
 type Stage string
 
 const (
+	StageKind   Stage = "kind"   // this is work the gate can judge
 	StageResult Stage = "result" // the tender said what it did
 	StageTest   Stage = "test"   // tests pass on the branch
 	StageReview Stage = "review" // a second agent read the diff
@@ -40,8 +41,15 @@ type Report struct {
 	Bead    string
 	Reached Stage
 	Passed  bool
-	Why     string
-	Stages  []StageResultRecord
+
+	// Refused means the gate declined to judge rather than judging and saying
+	// no. Kept apart from Passed because everything downstream -- the exit
+	// status, the words a person reads, what gets counted as failed work --
+	// wants the difference, and a bare false cannot carry it.
+	Refused bool
+
+	Why    string
+	Stages []StageResultRecord
 }
 
 // StageResultRecord is one stage's outcome.

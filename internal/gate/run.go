@@ -40,22 +40,39 @@ func Run(o Options) (Report, error) {
 	// make a refusal reconstructable; this makes it findable without walking
 	// them, which is the difference between a question that is answerable and
 	// one that is worth asking.
-	finish := func(r Report) Report {
+	finishAs := func(r Report, outcome string) Report {
 		events.Emit(events.Event{
 			Name: "gate.run", Bead: t.Bead, Bed: t.Bed,
-			Outcome: outcomeOf(r.Passed), Duration: time.Since(began),
+			Outcome: outcome, Duration: time.Since(began),
 			Fields: events.F{
 				"reached": string(r.Reached), "why": r.Why,
 				"stages": len(r.Stages), "branch": t.Branch,
 				"dry_run": o.DryRun, "into": o.Into, "remote": o.Remote,
 				"tender_duration_ms": time.Since(t.Started).Milliseconds(),
+				"spike":              t.Spike,
 			},
 		})
 		return r
 	}
+	finish := func(r Report) Report { return finishAs(r, outcomeOf(r.Passed)) }
 	stop := func(why string) (Report, error) {
 		rep.Passed, rep.Why = false, why
 		return finish(rep), nil
+	}
+
+	// A spike is not work this gate can judge. It lands no diff by design, so
+	// every stage below would read its success as failure -- and the better the
+	// spike, the more confidently the gate would report it as failed work.
+	//
+	// Refused rather than failed, and the word matters where it is counted: a
+	// refusal is the gate saying this is not its question, not a verdict on the
+	// work. A spike closes on findings recorded, which is somebody else's job.
+	if t.Spike {
+		step(StageKind, false, "spike", 0)
+		rep.Passed, rep.Refused = false, true
+		rep.Why = "a spike is not gated: it explores and records its findings with " +
+			"bd remember, and leaves no diff to test, review or land"
+		return finishAs(rep, "refused"), nil
 	}
 
 	// The tender's own account. A tender that reported itself blocked has said

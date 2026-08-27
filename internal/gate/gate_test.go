@@ -103,6 +103,59 @@ func TestGateStopsAtAnUnfinishedTender(t *testing.T) {
 	}
 }
 
+// A spike lands no diff by design, so every stage below the first would read
+// its success as failure. The gate has to decline before it starts measuring,
+// and say why in words that name what a spike is.
+func TestTheGateRefusesASpikeBeforeItLooksForWork(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "bed"), 0o755)
+	td := tender.Tender{Bead: "x-1", Worktree: filepath.Join(dir, "bed"), Spike: true}
+	// A finished, done spike: everything a tender needs to be gated, so what
+	// stops it can only be that it is a spike.
+	os.WriteFile(td.ResultPath(), []byte("## Outcome\ndone -- found the answer\n"), 0o644)
+
+	rep, err := Run(Options{Tender: td})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Passed {
+		t.Error("a spike passed the gate; it has nothing to land")
+	}
+	if !rep.Refused {
+		t.Error("refusing to judge a spike was recorded as judging it and saying no")
+	}
+	if rep.Reached != StageKind {
+		t.Errorf("reached %q, want the gate to stop at %q before testing anything", rep.Reached, StageKind)
+	}
+	if !strings.Contains(rep.Why, "spike") {
+		t.Errorf("why = %q, want a reason naming what a spike is", rep.Why)
+	}
+	// The result file said done. If the gate got as far as reading it, it was
+	// measuring a spike against a tender's yardstick.
+	for _, st := range rep.Stages {
+		if st.Stage != StageKind {
+			t.Errorf("gate reached stage %q on a spike", st.Stage)
+		}
+	}
+}
+
+// An ordinary tender must still be judged, or the guard above has turned the
+// gate off for everything.
+func TestTheGateStillJudgesATender(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "bed"), 0o755)
+	td := tender.Tender{Bead: "x-1", Worktree: filepath.Join(dir, "bed")}
+	os.WriteFile(td.ResultPath(), []byte("## Outcome\ndone -- it works\n"), 0o644)
+
+	rep, _ := Run(Options{Tender: td})
+	if rep.Refused {
+		t.Error("an ordinary tender was refused as though it were a spike")
+	}
+	if rep.Reached == StageKind {
+		t.Error("a tender stopped at the spike guard")
+	}
+}
+
 func TestGateStopsWhenTheTenderReportsBlocked(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, "bed"), 0o755)

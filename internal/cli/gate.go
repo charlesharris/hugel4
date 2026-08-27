@@ -83,6 +83,12 @@ flags:
 		return err
 	}
 	printGate(rep, *verbose)
+	// A refusal is not a verdict. Saying "did not pass the gate" about a spike
+	// would report the thing the gate declined to judge as work that failed,
+	// which is the whole reason it declines.
+	if rep.Refused {
+		return fmt.Errorf("%s is not work the gate can judge", rep.Bead)
+	}
 	if !rep.Passed {
 		return fmt.Errorf("%s did not pass the gate", rep.Bead)
 	}
@@ -110,6 +116,10 @@ func printGate(rep gate.Report, verbose bool) {
 	fmt.Println()
 	if rep.Passed {
 		fmt.Printf("%s: %s\n", rep.Bead, rep.Why)
+		return
+	}
+	if rep.Refused {
+		fmt.Printf("%s was not gated: %s\n", rep.Bead, rep.Why)
 		return
 	}
 	fmt.Printf("%s stopped at %s: %s\n", rep.Bead, rep.Reached, rep.Why)

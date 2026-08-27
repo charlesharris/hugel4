@@ -151,6 +151,29 @@ func TestBriefCarriesAnExtraNote(t *testing.T) {
 	}
 }
 
+// The gate loads a tender from disk to decide whether to judge it, so a spike
+// that forgets it is a spike between Start and Load is a spike the gate will
+// test, review and fail for landing nothing.
+func TestASpikeIsStillASpikeAfterARoundTrip(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	dir, err := Dir("hugel4-sd7.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, td := sample(dir)
+	td.Spike = true
+	if err := td.save(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(td.Bead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Spike {
+		t.Error("a spike loaded back as an ordinary tender; the gate would judge it on a diff it never makes")
+	}
+}
+
 func TestSaveAndListRoundTrip(t *testing.T) {
 	garden := t.TempDir()
 	t.Setenv("HUGEL_HOME", garden)
