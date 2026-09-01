@@ -404,3 +404,23 @@ func TestTheCriterionSaysWhenItDoesNotApply(t *testing.T) {
 		}
 	}
 }
+
+// An empty diff is not evidence that nothing happened.
+//
+// A bead whose product is garden state — verdicts in the pile, a trimmed log —
+// leaves the branch untouched, so a reviewer reading only the diff sees a claim
+// and nothing to check it against. It has to know to go and look at the thing
+// itself.
+func TestTheReviewerIsToldWhenTheWorkIsNotInTheDiff(t *testing.T) {
+	td := tender.Tender{Bead: "x-1", Title: "a bead", Branch: "hugel/x-1", Worktree: "/w/bed"}
+	b := ReviewBrief(td, "", "ok")
+	for _, want := range []string{
+		"For the reviewer",
+		"against the thing itself",
+		"work you have not been shown",
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("the review brief is missing %q", want)
+		}
+	}
+}

@@ -518,3 +518,62 @@ func TestASpikeIsNotToldToInstrumentAnything(t *testing.T) {
 		t.Error("a spike was given a convention about code it is forbidden to write")
 	}
 }
+
+// A bead whose product is garden state rather than code must not be told to do
+// something it must not.
+//
+// The rule used to read "Do not work outside this worktree", which is not what
+// it protects. hugel4-pob.1's whole product is verdicts written by
+// hugel pile review, into ~/.hugel/pile, outside the worktree by construction:
+// the brief handed that tender a rule and a job it could not both obey. An
+// agent that reads such a rule literally is blocked on a bead nobody thinks is
+// blocked, and one that ignores it has learned the prohibitions are advisory —
+// which is worse, since the same list is what keeps it off other branches.
+func TestTheBriefForbidsOtherWorktreesRatherThanTheGarden(t *testing.T) {
+	o, td := sample("/garden/tenders/hugel4-pob.1")
+	b := Brief(o, td)
+
+	if strings.Contains(b, "Do not work outside this worktree") {
+		t.Error("the brief still forbids everything outside the worktree")
+	}
+	for _, want := range []string{
+		"another tender's worktree",
+		"the project's own checkout",
+		"~/.hugel",
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("the narrowed rule is missing %q", want)
+		}
+	}
+}
+
+// Work outside the worktree is not on the branch, so the gate judges a change
+// it cannot see. That is a reason to require it be declared, not a reason to
+// forbid the work.
+func TestTheBriefRequiresOutOfWorktreeChangesToBeDeclared(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	b := Brief(o, td)
+	for _, want := range []string{
+		"no reviewer can read it", // wraps in the brief, so match either side
+		"as a diff",
+		"changed outside this worktree",
+	} {
+		if !strings.Contains(b, want) {
+			t.Errorf("the brief does not ask for a declaration: missing %q", want)
+		}
+	}
+}
+
+// A spike writes no code, so it has no branch to hide a change on. The rule is
+// still wrong for the same reason and is narrowed the same way.
+func TestTheSpikeBriefNarrowsTheSameRule(t *testing.T) {
+	o, td := sample("/garden/tenders/x")
+	o.Spike = true
+	b := Brief(o, td)
+	if strings.Contains(b, "Do not work outside this worktree") {
+		t.Error("the spike brief still forbids everything outside the worktree")
+	}
+	if !strings.Contains(b, "another agent's worktree") {
+		t.Error("the spike brief does not name what it is protecting")
+	}
+}

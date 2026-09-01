@@ -96,6 +96,13 @@ still be wrong, so once they are answered, keep looking:
   commented-out block, a file it did not mean to add?
 - Does what it claims in its result match what the diff actually does?
 
+Some beads change the garden rather than the code, and their product is not in
+the diff: verdicts written to the pile, a log trimmed, a config moved. The
+tender is told to declare any such change under "For the reviewer". Check that
+declaration against the thing itself rather than against the account of it, and
+treat an empty diff with no declaration as work you have not been shown -- not
+as work that did nothing.
+
 Read the code. A review that only reads the tender's account of the code is
 worth nothing.
 

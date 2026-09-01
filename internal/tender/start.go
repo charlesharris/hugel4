@@ -239,7 +239,13 @@ its own at %s, on branch %s. %s
 
 - Do not push, merge, rebase onto another branch, or touch any branch but %s.
 - Do not close the bead. A separate review decides whether this lands.
-- Do not work outside this worktree. Other tenders are working elsewhere.
+- Do not work in another tender's worktree, or in the project's own checkout.
+  Other tenders are working elsewhere and a person may be sitting in the main
+  one. The garden's own files under ~/.hugel are a different matter: a bead may
+  be about them, and where it is, changing them is the work rather than a
+  trespass. But such a change is not on your branch, so no reviewer can read it
+  as a diff -- say in your result what you changed outside the worktree and how
+  it could be undone.
 - Do not edit the brief.
 
 ## The result file
@@ -257,7 +263,8 @@ Write %s as markdown, with these sections:
 
     ## For the reviewer
     anything a reviewer should look at first: a judgement call made, a
-    shortcut taken, a thing that did not work and why
+    shortcut taken, a thing that did not work and why, and anything you
+    changed outside this worktree, which the diff will not show
 
 Writing that file is how the garden learns you have finished, so write it last
 and write it once.
@@ -301,7 +308,9 @@ worktree is thrown away. What survives this session is what you record.
 - Do not write code. No edits, no new files, no commits. A spike that leaves a
   diff has done the next bead's work badly instead of its own work well.
 - Do not close the bead, and do not start the work this is exploring for.
-- Do not work outside this worktree. Other agents are working elsewhere.
+- Do not work in another agent's worktree, or in the project's own checkout.
+  Other agents are working elsewhere and a person may be sitting in the main
+  one.
 - Do not edit the brief.
 
 ## The result file
