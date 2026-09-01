@@ -21,6 +21,15 @@
 //
 // There are no spans and no SDK. Causality in a garden does not cross machines,
 // so the bead is the trace id and a flat line is the whole model.
+//
+// The log begins on 2026-09-01. Everything before that date was test exhaust:
+// the gate and tender tests ran without HUGEL_HOME set and emitted into the
+// gardener's own log, 495 events under the bead x-1 or under no bead at all,
+// against which not one real event had ever been recorded. They were removed
+// rather than kept, because a log that has to be filtered before every query is
+// a log nobody queries, and a filter written once is a filter that outlives the
+// reason for it. The removed lines are at ~/.hugel/events.jsonl.test-exhaust-2026-09-01.bak
+// on the machine they came from; nothing reads them and nothing should.
 package events
 
 import (
