@@ -20,8 +20,10 @@ import (
 // meant HUGEL_HOME relocated the config, the draw log and the marks but left
 // the pile behind -- which is fine until a test writes to the real one.
 func DefaultRoot() (string, error) {
+	// HUGEL_PILE is the one path that does not come through config.Home, so it
+	// is the one path the sandbox has to be asked for by name.
 	if r := os.Getenv("HUGEL_PILE"); r != "" {
-		return r, nil
+		return config.Sandbox(r), nil
 	}
 	home, err := config.Home()
 	if err != nil {

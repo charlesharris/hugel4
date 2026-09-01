@@ -23,15 +23,19 @@ type Config struct {
 }
 
 // Home is the garden directory.
+//
+// Everything the garden keeps hangs off this one path, so it is also the one
+// place a test can be stopped from reaching the gardener's real garden. See
+// Sandbox.
 func Home() (string, error) {
 	if h := os.Getenv("HUGEL_HOME"); h != "" {
-		return h, nil
+		return Sandbox(h), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate home dir: %w", err)
 	}
-	return filepath.Join(home, ".hugel"), nil
+	return Sandbox(filepath.Join(home, ".hugel")), nil
 }
 
 func path() (string, error) {

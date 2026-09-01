@@ -181,3 +181,18 @@ func TestDefaultRootFollowsTheGarden(t *testing.T) {
 		t.Errorf("DefaultRoot = %q, want HUGEL_PILE to win", got)
 	}
 }
+
+// HUGEL_PILE is the one garden path that does not come through config.Home, so
+// it is the one that has to ask for the sandbox by name. The pile was moved
+// under the garden because a test nearly wrote to the real one; the explicit
+// override is the hole that move left open.
+func TestAnExplicitPileOutsideATempDirIsRefused(t *testing.T) {
+	t.Setenv("HUGEL_PILE", filepath.Join(string(filepath.Separator), "var", "hugel-pile-is-not-here"))
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("a non-temporary HUGEL_PILE was accepted")
+		}
+	}()
+	DefaultRoot()
+}

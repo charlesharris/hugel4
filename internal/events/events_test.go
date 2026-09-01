@@ -212,3 +212,23 @@ func TestNilTimerIsHarmless(t *testing.T) {
 	var tm *Timer
 	tm.Done("ok", nil)
 }
+
+// The one failure Emit is allowed to have.
+//
+// Emit swallows everything else on purpose -- an instrument that can break the
+// thing it measures is worse than no instrument -- and that is exactly why a
+// test emitting into the gardener's real log went unnoticed for 471 events. A
+// swallowed refusal would be a test that quietly measured nothing, so this one
+// refusal is loud, and it is loud only while a test binary is running.
+func TestEmittingWithoutATemporaryGardenFailsTheTest(t *testing.T) {
+	t.Setenv("HUGEL_HOME", "") // the omission that leaked
+
+	done := make(chan any, 1)
+	go func() {
+		defer func() { done <- recover() }()
+		Emit(Event{Name: "gate.stage", Bead: "x-1"})
+	}()
+	if r := <-done; r == nil {
+		t.Fatal("Emit wrote to the gardener's real events log instead of failing")
+	}
+}
