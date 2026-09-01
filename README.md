@@ -532,7 +532,7 @@ Nothing draws soil unless something asks for it, and the cheapest thing that
 can ask is the agent itself.
 
 ```
-make install        hugel4 on PATH, and the skill into ~/.claude/skills
+make install        hugel on PATH, and the skill into ~/.claude/skills
 ```
 
 The skill is the pull path: an agent decides it needs prior knowledge, draws a
@@ -548,8 +548,14 @@ tried rather than the fallback. If it proves too lossy, the push version hooks
 `UserPromptSubmit`, not `SessionStart` — the prompt is the query, and at session
 start there is nothing to ask about yet.
 
-It installs as `hugel4`. An earlier generation still owns `hugel` on PATH and is
-wired into live hooks; it keeps the name until it retires.
+It installs as `hugel`. The name was held by a generation archived on
+2026-05-04, whose binary now sits beside this one as `hugel-archived` with its
+eight hooks repointed there — archived is not dead, and all eight still answer.
+Retiring them is a separate decision and not a side effect of a rename.
+
+The **bed** is still `hugel4`, because a bed is named for a working directory
+and this one is `~/src/hugel4`. The binary is the thing that had the wrong name;
+the directory has the right one, and bead ids are prefixed from it.
 
 ## `hugel bed`
 

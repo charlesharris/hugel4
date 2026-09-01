@@ -12,7 +12,7 @@ piece of work. Drawing is read-only; it writes nothing.
 ## Draw
 
 ```
-hugel4 soil "what the work is about"
+hugel soil "what the work is about"
 ```
 
 The bed — the project — defaults to the working directory's name, which is how
@@ -40,7 +40,7 @@ A draw is a survey: each entry returns as a heading, an excerpt, and an id.
 Reading one in full is a second, deliberate step.
 
 ```
-hugel4 pile show <id>
+hugel pile show <id>
 ```
 
 Follow up only on entries load-bearing for the decision in front of you.
@@ -65,8 +65,8 @@ If a drawn entry is wrong, stale, or replaced by something newer, say so to the
 user and name the command — don't run it. Review is a human vouching:
 
 ```
-hugel4 pile review <id> --reject --why "..."
-hugel4 pile review <id> --superseded-by <newer-id>
+hugel pile review <id> --reject --why "..."
+hugel pile review <id> --superseded-by <newer-id>
 ```
 
 Soil ranks vouched entries higher precisely because a person stood behind them.

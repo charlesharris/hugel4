@@ -49,7 +49,7 @@ Say so in the description when the ordering is the interesting part.
 Ask the pile what has been decided about this area already:
 
 ```
-hugel4 soil "what the work is about"
+hugel soil "what the work is about"
 ```
 
 Plenty of proposed work is a decision someone already took, or already
