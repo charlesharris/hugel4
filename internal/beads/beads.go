@@ -142,6 +142,32 @@ func Read(dir string) (*Work, error) {
 	return w, nil
 }
 
+// ReadReady is Read's cheaper half: only the beads bd says can be started.
+//
+// Read asks bd twice, once for the work and once for the ready set, because a
+// garden view needs both. A completer needs one, and a shell that pauses for
+// two subprocesses on every tab is a shell nobody presses tab in.
+func ReadReady(dir string) (*Work, error) {
+	w := &Work{Bed: filepath.Base(dir), Dir: dir}
+	out, err := run(dir, "ready", "--json")
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(out, &w.Beads); err != nil {
+		return nil, fmt.Errorf("read ready beads in %s: %w", dir, err)
+	}
+	for i := range w.Beads {
+		w.Beads[i].Ready = true
+	}
+	sort.Slice(w.Beads, func(i, j int) bool {
+		if w.Beads[i].Priority != w.Beads[j].Priority {
+			return w.Beads[i].Priority < w.Beads[j].Priority
+		}
+		return w.Beads[i].ID < w.Beads[j].ID
+	})
+	return w, nil
+}
+
 func run(dir string, args ...string) ([]byte, error) {
 	cmd := exec.Command("bd", append([]string{"-C", dir}, args...)...)
 	out, err := cmd.Output()

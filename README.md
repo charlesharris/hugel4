@@ -621,8 +621,55 @@ internal/events/      what the garden did, one wide event at a time
 internal/tender/      working one bead, unattended, in tmux
 internal/gate/        deciding whether that work lands
 internal/cli/         thin command drivers, no domain logic
+internal/complete/    what a shell should offer, and the script that asks
 skills/hugel-soil/    the agent-facing way to draw soil
 ```
+
+## Completion
+
+```
+hugel completion zsh > ~/.local/share/zsh/site-functions/_hugel
+```
+
+`make install` does this, and says what to add to `~/.zshrc` if that directory
+is not on `$fpath`.
+
+The point is not the flags. Every interesting argument hugel takes is a value
+you would otherwise look up by running something else first — a bead id from
+`bd ready`, a tender from `hugel tender --list`, an entry id from `hugel pile
+list`. Those lookups are most of what it costs to drive hugel from a keyboard,
+and a shell is the right place to pay them.
+
+So the binary answers what only it can:
+
+```
+hugel complete ready       what a tender could start, here
+hugel complete tended      beads with a finished tender, for the gate
+hugel complete live        tenders still working, for --stop
+hugel complete entries     pile entry ids, with their titles
+```
+
+**It completes what the argument means, not what shape it is.** `hugel gate`
+offers beads that have been tended, not every open bead. `hugel tender --stop`
+offers tenders that are running, not every tender that ever ran. A completion
+that offers every value of the right type is only slightly better than none.
+
+**Nothing here may load transcripts.** `hugel tender --list` takes 780ms and
+`hugel bed list` a second and a half, almost all of it scanning
+`~/.claude/projects`. A completer runs on every tab, so every source is a
+directory read, one `bd` call, or one `git` call. The ready queue is the
+slowest at ~140ms, which is bd's floor and not hugel's to fix.
+
+**The script is generated, and thin.** Generated because a checked-in `_hugel`
+drifts the moment a flag is added — which is exactly how this project lost
+completions the first time, when the generation that had them stopped using the
+library that produced them and nothing noticed. Thin because everything that
+changes as work happens is fetched by calling `hugel complete`, so a script
+installed today keeps working when a source is added tomorrow.
+
+The shape of the CLI is now written down twice, so a test walks the flag
+registrations in `internal/cli` and fails the build when the two disagree. A
+second copy that nothing checks rots the same way, only slower.
 
 ## Development
 

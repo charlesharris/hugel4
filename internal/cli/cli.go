@@ -28,6 +28,7 @@ usage:
   hugel gate <bead>       test, review, test again, then land it
   hugel dispatch          fill the tender slots from the ready queue
   hugel hooks <name>      what the harness runs on hugel's behalf
+  hugel completion zsh    a completion script for your shell
 
 run "hugel <command> -h" for flags.
 `
@@ -65,6 +66,10 @@ func Run(args []string) error {
 		return runDispatch(args[1:])
 	case "hooks":
 		return runHooks(args[1:])
+	case "complete":
+		return runComplete(args[1:])
+	case "completion":
+		return runCompletion(args[1:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return nil
