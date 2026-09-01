@@ -310,6 +310,22 @@ from being reproduced.
 A project whose tests hugel cannot find cannot be gated. Discovery never guesses
 its way to a pass: no test command means a refusal, not a skip.
 
+**It merges the branch it lands on, and lands only forwards.** The base is the
+local branch, never the remote's copy of it — merging one ref and moving
+another is harmless only while the two agree. The first real gate run proved
+what happens when they do not: `origin/main` was four commits behind, so
+merging it was a no-op that reported "clean", the retest passed against a base
+that was already an ancestor, and the landing moved `main` back onto the branch
+tip and dropped three commits while every stage said ok.
+
+So the landing refuses a head that does not descend from where the branch is,
+and uses `update-ref`'s compare-and-swap form so a branch that moved during the
+gate is a refusal rather than an overwrite. With the right base neither can
+fire, which is the argument for both: they cost two git calls and they stand
+between a wrong base and commits that exist only in a reflog nobody thought to
+read. A base behind its remote is refused too, and left to the gardener — the
+gate pulling would move a branch somebody else is standing on.
+
 ## `hugel dispatch`
 
 Fill the tender slots from the ready queue.

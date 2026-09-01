@@ -1,8 +1,10 @@
 package gate
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -149,12 +151,25 @@ func Run(o Options) (Report, error) {
 
 	// Merge onto whatever the base has become, in the tender's own worktree, so
 	// a conflict is left in a directory nobody else is working in.
+	//
+	// The base is the local branch this lands on, never the remote's copy of
+	// it. Merging one ref and moving another is only harmless while the two
+	// agree, and the first real gate run proved what happens when they do not:
+	// origin/main was four commits behind, so merging it was a no-op that
+	// reported "clean", and the landing then moved main back onto the branch
+	// tip and dropped three commits while every stage said ok.
 	o.say("merging %s into %s", t.Branch, o.Into)
 	start = time.Now()
-	if _, err := git(t.Worktree, "fetch", "--quiet", o.Remote, o.Into); err != nil && o.Remote != "" {
-		o.say("could not fetch %s: %v", o.Remote, err)
+	if o.Remote != "" {
+		if _, err := git(t.Worktree, "fetch", "--quiet", o.Remote, o.Into); err != nil {
+			o.say("could not fetch %s: %v", o.Remote, err)
+		}
+		if err := checkBase(t.Worktree, o.Into, baseRef(o)); err != nil {
+			step(StageMerge, false, err.Error(), time.Since(start))
+			return stop(err.Error())
+		}
 	}
-	if out, err := git(t.Worktree, "merge", "--no-edit", baseRef(o)); err != nil {
+	if out, err := git(t.Worktree, "merge", "--no-edit", o.Into); err != nil {
 		// Abort rather than leaving the worktree mid-merge. A half-merged
 		// worktree cannot be gated again and reads as broken, while the
 		// conflict itself is one command away from being reproduced by whoever
@@ -162,7 +177,7 @@ func Run(o Options) (Report, error) {
 		_, _ = git(t.Worktree, "merge", "--abort")
 		step(StageMerge, false, tail(out+err.Error(), 12), time.Since(start))
 		return stop(fmt.Sprintf("%s conflicts with %s; rebase it in %s and gate it again",
-			t.Branch, baseRef(o), t.Worktree))
+			t.Branch, o.Into, t.Worktree))
 	}
 	step(StageMerge, true, "clean", time.Since(start))
 
@@ -173,11 +188,11 @@ func Run(o Options) (Report, error) {
 	out, err = runTests(t.Worktree, test)
 	events.Emit(events.Event{
 		Name: "gate.test", Bead: t.Bead, Bed: t.Bed, Outcome: outcomeOf(err == nil),
-		Duration: time.Since(start), Fields: events.F{"command": test, "on": "merged", "base": baseRef(o)},
+		Duration: time.Since(start), Fields: events.F{"command": test, "on": "merged", "base": o.Into},
 	})
 	step(StageRetest, err == nil, tail(out, 12), time.Since(start))
 	if err != nil {
-		return stop("tests fail once merged with " + baseRef(o) + ", though they passed on the branch")
+		return stop("tests fail once merged with " + o.Into + ", though they passed on the branch")
 	}
 
 	// Land it. The base branch is moved in the main repository rather than the
@@ -194,10 +209,11 @@ func Run(o Options) (Report, error) {
 	// stay computable later. Without it, all a revert can be matched against is
 	// the one sha recorded here, and a branch of three commits reverted by its
 	// middle one reads as work that survived.
-	base, _ := git(t.Repo, "rev-parse", o.Into)
-	if out, err := git(t.Repo, "update-ref", "refs/heads/"+o.Into, strings.TrimSpace(head)); err != nil {
-		step(StagePush, false, tail(out+err.Error(), 8), time.Since(start))
-		return stop("cannot move " + o.Into + " to the merged head")
+	base, err := land(t.Repo, o.Into, strings.TrimSpace(head))
+	head = strings.TrimSpace(head)
+	if err != nil {
+		step(StagePush, false, err.Error(), time.Since(start))
+		return stop(err.Error())
 	}
 	if o.Remote != "" {
 		if out, err := git(t.Repo, "push", o.Remote, o.Into); err != nil {
@@ -209,7 +225,7 @@ func Run(o Options) (Report, error) {
 	events.Emit(events.Event{
 		Name: "gate.land", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
 		Fields: events.F{
-			"sha": strings.TrimSpace(head), "base": strings.TrimSpace(base),
+			"sha": head, "base": base,
 			"into": o.Into, "remote": o.Remote, "pushed": o.Remote != "",
 		},
 	})
@@ -234,6 +250,103 @@ func outcomeOf(ok bool) string {
 	return "failed"
 }
 
+// checkBase refuses to gate onto a branch that is behind its remote.
+//
+// The gardener's to reconcile, not the gate's: pulling would move a branch
+// somebody else may be standing on, and landing anyway means testing against
+// one base and pushing to another, which is the bug this whole guard exists
+// for. Being ahead is fine and ordinary -- that is just work not pushed yet.
+//
+// A remote ref that does not exist is not a refusal. A branch never pushed has
+// nothing to be behind.
+func checkBase(dir, into, remoteRef string) error {
+	if _, err := git(dir, "rev-parse", "--verify", "-q", remoteRef); err != nil {
+		return nil
+	}
+	behind, err := isAncestor(dir, into, remoteRef)
+	if err != nil || !behind {
+		return nil
+	}
+	same, err := sameCommit(dir, into, remoteRef)
+	if err != nil || same {
+		return nil
+	}
+	return fmt.Errorf("%s is behind %s: pull it before gating, or the gate would test one base and push to another",
+		into, remoteRef)
+}
+
+// land moves a branch to a commit, and refuses to do it destructively.
+//
+// Returns where the branch was, which the landing event records so the commits
+// a landing introduced stay computable afterwards.
+//
+// Two refusals, both learned from one run. The first is that the new head must
+// descend from the current one: with a correct base that can never fire, which
+// is exactly the argument for it, since the check costs one git call and is
+// the only thing between a wrong base and commits that exist solely in a
+// reflog nobody thought to read. The second is compare-and-swap -- the
+// three-argument update-ref only moves the ref if it still holds the value
+// just read -- so a branch that moved while the gate was testing is a refusal
+// rather than a silent overwrite.
+func land(repo, into, head string) (string, error) {
+	base, err := git(repo, "rev-parse", into)
+	if err != nil {
+		return "", fmt.Errorf("cannot read %s: %w", into, err)
+	}
+	base = strings.TrimSpace(base)
+
+	ff, err := isAncestor(repo, base, head)
+	if err != nil {
+		return base, fmt.Errorf("cannot tell whether %s descends from %s: %w", short(head), short(base), err)
+	}
+	if !ff {
+		return base, fmt.Errorf("refusing to move %s to %s, which does not descend from %s: that would discard work",
+			into, short(head), short(base))
+	}
+	if out, err := git(repo, "update-ref", "refs/heads/"+into, head, base); err != nil {
+		return base, fmt.Errorf("cannot move %s to the merged head: %s", into, tail(out+err.Error(), 8))
+	}
+	return base, nil
+}
+
+// isAncestor reports whether a is reachable from b.
+func isAncestor(dir, a, b string) (bool, error) {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", a, b)
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
+			return false, nil // a definite no, not a broken call
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// sameCommit reports whether two refs name the same commit, which is the case
+// isAncestor cannot distinguish from being behind.
+func sameCommit(dir, a, b string) (bool, error) {
+	x, err := git(dir, "rev-parse", a)
+	if err != nil {
+		return false, err
+	}
+	y, err := git(dir, "rev-parse", b)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(x) == strings.TrimSpace(y), nil
+}
+
+func short(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
+}
+
+// baseRef names the remote's copy of the branch, which is what the gate
+// reconciles against. It is deliberately not what the gate merges: see the
+// merge stage.
 func baseRef(o Options) string {
 	if o.Remote == "" {
 		return o.Into
