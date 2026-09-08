@@ -399,9 +399,11 @@ the extent, `outcome` to a status, `bead` to a trace id, everything else to
 attributes — and nothing depends on that ever happening.
 
 Flat rather than nested, so `jq` reads it without descending into an attributes
-object on every query. Emitting cannot fail its caller: every emitter sits
-inside work that matters more than its own instrumentation, and a log that
-cannot be written loses the event and nothing else.
+object on every query. Emitting hands its error back rather than absorbing it:
+every emitter sits inside work that matters more than its own instrumentation,
+so the caller reports a failed write on stderr without letting it fail the
+work — silence was no longer usable once it became indistinguishable from a
+log that had stopped being written.
 
 ## `hugel hooks`
 

@@ -231,7 +231,9 @@ func TestTimerMeasuresAndMerges(t *testing.T) {
 
 	tm := Start("gate.stage", Event{Bead: "x-1", Fields: F{"stage": "retest", "keep": "me"}})
 	at(t, start.Add(3*time.Second))
-	tm.Done("failed", F{"stage": "overridden", "added": "late"})
+	if err := tm.Done("failed", F{"stage": "overridden", "added": "late"}); err != nil {
+		t.Fatal(err)
+	}
 
 	got, _ := Load()
 	if len(got) != 1 {
@@ -252,19 +254,20 @@ func TestTimerMeasuresAndMerges(t *testing.T) {
 	}
 }
 
-// A nil timer is what a caller holds when it decided not to measure something.
+// A nil timer is what a caller holds when it decided not to measure
+// something. "Harmless" now means Done on it emits nothing and returns nil.
 func TestNilTimerIsHarmless(t *testing.T) {
 	var tm *Timer
-	tm.Done("ok", nil)
+	if err := tm.Done("ok", nil); err != nil {
+		t.Errorf("Done on a nil timer = %v, want nil", err)
+	}
 }
 
-// The one failure Emit is allowed to have.
-//
-// Emit swallows everything else on purpose -- an instrument that can break the
-// thing it measures is worse than no instrument -- and that is exactly why a
-// test emitting into the gardener's real log went unnoticed for 471 events. A
-// swallowed refusal would be a test that quietly measured nothing, so this one
-// refusal is loud, and it is loud only while a test binary is running.
+// Sandbox's own guard against resolving the gardener's real garden inside a
+// test. Every other error an emitter meets is now returned and reported by
+// its caller, but a test that resolved the real garden must not be allowed to
+// continue: a returned error would be too easy to ignore inside a test binary,
+// so this one refusal stays a panic instead of a value a caller could drop.
 func TestEmittingWithoutATemporaryGardenFailsTheTest(t *testing.T) {
 	t.Setenv("HUGEL_HOME", "") // the omission that leaked
 

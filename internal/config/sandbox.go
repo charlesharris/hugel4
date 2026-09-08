@@ -20,11 +20,13 @@ import (
 // the lesson, so the guard is here at the root rather than in one package.
 //
 // It panics rather than returning an error. Home's error return is for a
-// machine with no home directory, and every caller handles it by giving up
-// quietly — events.Emit swallows it by design, because an instrument that can
-// break the thing it measures is worse than no instrument. A swallowed refusal
-// is a test that silently measures nothing, so the refusal has to be the one
-// kind of failure a test cannot ignore. It costs the shipped binary nothing:
+// machine with no home directory; emitters now hand their own errors back and
+// their callers report them, rather than the package deciding on the
+// caller's behalf that a failure does not matter. The sandbox refusal stays a
+// panic for a different reason: it is a test-time guarantee, and a returned
+// error would be too easy to ignore inside a test binary, so a test that
+// silently resolved the gardener's real garden is exactly the failure mode
+// this guard exists to prevent. It costs the shipped binary nothing:
 // testing.Testing() is false there and the whole check is a branch.
 //
 // The rule is a temp dir rather than "HUGEL_HOME is set", so that a test which

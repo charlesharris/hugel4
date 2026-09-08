@@ -208,9 +208,14 @@ func Start(name string, e Event) *Timer {
 
 // Done emits the event with its duration and how it went. Fields given here are
 // merged over the ones given at Start.
-func (t *Timer) Done(outcome string, fields F) {
+//
+// It returns whatever Emit returns. A caller must treat that error the way
+// every emitter does: report it, do not let it fail the work being measured.
+// A nil timer is what a caller holds when it decided not to measure
+// something, so calling Done on it emits nothing and returns nil.
+func (t *Timer) Done(outcome string, fields F) error {
 	if t == nil {
-		return
+		return nil
 	}
 	e := t.event
 	e.Outcome = outcome
@@ -225,7 +230,7 @@ func (t *Timer) Done(outcome string, fields F) {
 		}
 		e.Fields = merged
 	}
-	Emit(e)
+	return Emit(e)
 }
 
 // Load reads every recorded event, oldest first. A missing log is no events,
