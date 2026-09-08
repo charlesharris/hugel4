@@ -106,10 +106,12 @@ func Run(o Options) (Report, error) {
 	o.say("testing the branch: %s", test)
 	start := time.Now()
 	out, err := runTests(t.Worktree, test)
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "gate.test", Bead: t.Bead, Bed: t.Bed, Outcome: outcomeOf(err == nil),
 		Duration: time.Since(start), Fields: events.F{"command": test, "on": "branch"},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.test", err)
+	}
 	step(StageTest, err == nil, tail(out, 12), time.Since(start))
 	if err != nil {
 		return stop("tests fail on the tender's branch")
@@ -135,14 +137,16 @@ func Run(o Options) (Report, error) {
 		step(StageReview, false, err.Error(), time.Since(start))
 		return stop("the review could not be run: " + err.Error())
 	}
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "gate.review", Bead: t.Bead, Bed: t.Bed, Outcome: string(verdict),
 		Duration: time.Since(start),
 		Fields: events.F{
 			"why": why, "reviewer_session": t.Session + "-review",
 			"had_criteria": strings.TrimSpace(accept) != "",
 		},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.review", err)
+	}
 	step(StageReview, verdict == Pass, string(verdict)+": "+why, time.Since(start))
 	if verdict != Pass {
 		return stop(fmt.Sprintf("the review said %s: %s", verdict, why))
@@ -190,10 +194,12 @@ func Run(o Options) (Report, error) {
 	o.say("testing the merged tree")
 	start = time.Now()
 	out, err = runTests(t.Worktree, test)
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "gate.test", Bead: t.Bead, Bed: t.Bed, Outcome: outcomeOf(err == nil),
 		Duration: time.Since(start), Fields: events.F{"command": test, "on": "merged", "base": o.Into},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.test", err)
+	}
 	step(StageRetest, err == nil, tail(out, 12), time.Since(start))
 	if err != nil {
 		return stop("tests fail once merged with " + o.Into + ", though they passed on the branch")
@@ -226,13 +232,15 @@ func Run(o Options) (Report, error) {
 		}
 	}
 	step(StagePush, true, pushDetail(o), time.Since(start))
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "gate.land", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
 		Fields: events.F{
 			"sha": head, "base": base,
 			"into": o.Into, "remote": o.Remote, "pushed": o.Remote != "",
 		},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.land", err)
+	}
 
 	reason := closeReason(t.Reason(), why)
 	if err := beads.Close(t.Repo, t.Bead, reason); err != nil {

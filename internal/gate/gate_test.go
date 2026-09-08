@@ -406,8 +406,11 @@ func TestAGateStillReachesItsVerdictWhenTheLogCannotBeWritten(t *testing.T) {
 	if !strings.Contains(stderrOutput, `event "gate.run" not recorded`) {
 		t.Errorf("stderr did not report the lost gate.run event: %s", stderrOutput)
 	}
-	if n := strings.Count(stderrOutput, "not recorded"); n < 2 {
-		t.Errorf("stderr reported %d lost events, want at least 2 (gate.stage and gate.run): %s", n, stderrOutput)
+	if !strings.Contains(stderrOutput, `event "gate.test" not recorded`) {
+		t.Errorf("stderr did not report the lost gate.test event: %s", stderrOutput)
+	}
+	if n := strings.Count(stderrOutput, "not recorded"); n < 3 {
+		t.Errorf("stderr reported %d lost events, want at least 3 (gate.stage, gate.test and gate.run): %s", n, stderrOutput)
 	}
 }
 
