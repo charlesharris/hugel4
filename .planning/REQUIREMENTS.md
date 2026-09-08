@@ -10,7 +10,7 @@ projected from it.
 
 ### Substrate
 
-- [ ] **SUB-01**: `events.Record` returns an error instead of swallowing it, so a caller can tell a written event from a dropped one
+- [x] **SUB-01**: `events.Record` returns an error instead of swallowing it, so a caller can tell a written event from a dropped one
 - [ ] **SUB-02**: Event writes are flushed durably, so a crash does not silently lose the tail of the log
 - [ ] **SUB-03**: A gardener can distinguish "nothing has run since <date>" from "writes have been failing since <date>" without reading the code
 - [ ] **SUB-04**: Compost emits a wide event per digested session
@@ -75,7 +75,7 @@ Every v1 requirement maps to exactly one phase. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | Phase 1 | Pending |
+| SUB-01 | Phase 1 | Complete |
 | SUB-02 | Phase 1 | Pending |
 | SUB-03 | Phase 1 | Pending |
 | SUB-04 | Phase 2 | Pending |
@@ -100,6 +100,7 @@ Every v1 requirement maps to exactly one phase. Filled during roadmap creation.
 | LOOP-03 | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 23 total
 - Mapped to phases: 23 ✓
 - Unmapped: 0
