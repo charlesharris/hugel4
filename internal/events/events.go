@@ -148,6 +148,13 @@ var mu sync.Mutex
 // that is achieved: only the caller knows whether its own work can tolerate a
 // warning, so the package hands the failure up rather than deciding on the
 // caller's behalf that it does not matter.
+//
+// It also syncs before it returns: the event has reached the file, not a
+// buffer, by the time a caller sees nil, which is what makes silence in the
+// log mean that nothing ran. On macOS Go's Sync issues fsync(2) rather than
+// F_FULLFSYNC, so the drive's own write cache sits outside this guarantee
+// (golang/go#26650) — Emit claims that its data left the process and the OS
+// accepted it, and nothing stronger.
 func Emit(e Event) error {
 	if e.Time.IsZero() {
 		e.Time = now()
@@ -175,6 +182,13 @@ func Emit(e Event) error {
 	// emitters from interleaving halves of each other's events.
 	if _, err := f.Write(append(b, '\n')); err != nil {
 		return fmt.Errorf("write event: %w", err)
+	}
+	// Checked synchronously, not deferred: a deferred Sync could not influence
+	// this return, and Emit would report success on data that never reached
+	// the file. Close stays deferred — once Sync has succeeded the bytes are
+	// durable, and a later close failure does not undo that.
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("sync event log: %w", err)
 	}
 	return nil
 }

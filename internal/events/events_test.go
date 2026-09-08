@@ -166,6 +166,37 @@ func TestEmitReturnsAnErrorWhenTheLogCannotBeWritten(t *testing.T) {
 	}
 }
 
+// This proves the narrower, testable claim: nothing of ours is holding the
+// event in a buffer between Emit returning and a fresh reader looking for it.
+// The fsync itself is a platform promise a power-loss test cannot observe from
+// go test on either macOS or Linux, and a failing fsync cannot be provoked
+// portably either -- the presence and checking of the Sync call are held by
+// the source assertions in this test's plan task instead of by this test.
+func TestEmitIsDurableBeforeItReturns(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	if err := Emit(Event{Name: "durable-before-return", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A fresh handle that shares nothing with the one Emit used: os.ReadFile
+	// opens, reads and closes its own file descriptor.
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Event.MarshalJSON builds a map[string]any, and encoding/json sorts map
+	// keys, so the quoted key is immediately followed by its quoted value with
+	// no space between them.
+	if !strings.Contains(string(b), `"name":"durable-before-return"`) {
+		t.Fatalf("log after Emit returned = %q, want it to already contain the event's name", b)
+	}
+}
+
 // Dispatch runs tenders concurrently, so two emitters can meet. Halves of two
 // events interleaved would corrupt both.
 func TestConcurrentEmittersDoNotInterleave(t *testing.T) {
