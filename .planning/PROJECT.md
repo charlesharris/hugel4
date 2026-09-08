@@ -32,63 +32,92 @@ cheap enough to deliver back into the next session that it actually gets used.
 - ✓ Tender — detached tmux sessions in per-bead git worktrees, brief generated from soil — existing
 - ✓ Gate — work, test, review, test, commit, merge, push, close — existing
 - ✓ Yield / survival / draws — cost accounting, landing grades, revert detection — existing
-- ✓ Beads integration, read-only — bd is the source of truth for work; hugel never writes it — existing
+- ✓ Beads integration — bd is the source of truth for work; hugel writes only three lifecycle transitions (`Close`, `HandBack`, `Release`), never content — existing
+- ✓ `hugel garden` — one screen across every bed (in flight / ready / blocked), Tab to the knowledge side; same surface, same sitting — existing
+- ✓ Attention routing — `HandBack` releases a claim, labels `needs-attention` and appends what the tender learned, in one bd invocation; `Queue` then refuses that bead to any tender — existing
+- ✓ Cochange — code↔code coupling derived from git on demand, computed and never stored — existing
+- ✓ Entry metadata — every entry carries `Paths` and `Beads`, populated at extraction; code↔entry and ticket↔entry joins already exist — existing
+- ✓ Events / draws — append-only wide-event log and draw log, both storing ids rather than counts — existing, barely populated
 - ✓ Redact — credential filtering before material reaches the pile — existing
 
 ### Active
 
-- [ ] **`hugel garden`** — a single entry point that starts the TUI and is the thing you log in and sit in front of
-- [ ] **Beds pane** — overview of every project: what is running, what landed, what is blocked
-- [ ] **Pile pane** — the state of accumulated knowledge across all beds, not one project's slice
-- [ ] **Attention pane** — what currently needs a human: tenders blocked on a decision, gate outcomes that refused, entries worth judging
-- [ ] **Structural relations in the pile** — edges between parts of code, and between code and tickets, so the pile knows shape and not only prose
-- [ ] **GSD as the work loop** — the discuss → plan → execute cycle drives the work; hugel supplies context in and captures findings out
-- [ ] **Findings written as work proceeds** — the pile updated during a session, not only at compost time afterwards
-- [ ] **Coordinator ↔ tender relay** — subagents spun off to do agreed work in isolation; the coordinator bubbles up only what genuinely needs the gardener and relays the answer back to the tender that asked
+Ordered by dependency. The substrate has to carry the facts before anything can
+be derived from it, and almost nothing is recorded today.
+
+**Substrate — record what is currently ephemeral**
+
+- [ ] **Widen event emission** — one wide event per unit of work from every subsystem, not two. Today `~/.hugel/events.jsonl` holds 32 events, all from `gate.*` and `tender.start`, last written 2026-09-01. Nothing from compost, soil, spike, dispatch, review, land or handback.
+- [ ] **Stop discarding bd's dependency graph** — `beads.Bead` collapses dependencies, defer dates and gates into `Ready bool`. bd knows the ticket↔ticket edges; hugel drops them at the boundary. Carry them without recomputing readiness.
+- [ ] **Enrich what a bead carries** — the structural context a graph needs must live somewhere durable and re-readable, in bd or beside it.
+- [ ] **Record the ephemeral middle** — coordinator decisions, tender progress, spike findings and gate refusals are lost when the tmux session dies. Whatever the graph should know about them has to be written at the boundary that knows it.
+
+**Graph — projected over the substrate**
+
+- [ ] **Stored relation graph** — a queryable graph of code↔code, code↔ticket, ticket↔ticket and entry↔entry relations. Stored, on the explicit understanding that it is a projection: droppable and rebuildable by replaying events, entries and git, so a migration has nothing irreplaceable to lose.
+- [ ] **Graph in the draw path** — soil ranking consults structure, not only wording. `cochange` already proves the shape of this.
+
+**Surface**
+
+- [ ] **Session-persistent garden** — `hugel garden` renders once and exits today. It should stay resident: refresh as tenders progress, land and hand back, and be the thing that is logged into and left open.
+
+**Loop**
+
+- [ ] **GSD drives the work loop** — discuss → plan → execute; hugel supplies context in and captures findings out, rather than growing a second planner.
+- [ ] **Findings written as work proceeds** — the pile updated during a session, not only at compost time afterwards.
+- [ ] **Human → tender return leg** — the tender → human handback is built (`HandBack` + `Queue` refusal + attention-first ordering). The answer currently returns as bd notes picked up by a *fresh* tender. Relay it back into the session that asked.
 
 ### Out of Scope
 
-- **An unbounded review queue** — a backlog of hundreds is not judged, it is abandoned. Recorded twice as a deliberate refusal (`aa4d8fb7`, `2a841ffd`). The attention pane above must be bounded by live work, not by pile size.
-- **Edges that wait on a human to notice a relationship** — measured at zero. `supersedes` is reachable only through `pile review --superseded-by` and has never fired once across 289 entries (`2b9d936f`).
-- **LLM edge inference at extraction time** — built once already and left nothing behind; the entries describing it survive only as legacy-import markdown (`680d9417`).
-- **Hugel writing to bd** — bd stays the source of truth for work; hugel reads it.
+- **An unbounded review queue** — a backlog of hundreds is not judged, it is abandoned. Recorded twice as a deliberate refusal (`aa4d8fb7`, `2a841ffd`).
+- **Non-bead sources in the attention list** — anything needing the gardener becomes a bead carrying `needs-attention`. One source of truth, and the no-inbox refusal is preserved structurally rather than by discipline.
+- **Edges asserted by a human** — measured at zero across 289 entries (`2b9d936f`). An edge that waits on a person to notice a relationship gets no edges.
+- **LLM edge inference at extraction time** — built once already and left nothing behind (`680d9417`).
+- **A graph that cannot be rebuilt** — every graph hugel has kept died with the store it lived in (`internal/cochange/cochange.go`). Storing one is only acceptable while it remains a projection over durable sources.
+- **Hugel writing bd content** — lifecycle transitions only (`Close`, `HandBack`, `Release`).
 - **A server, or any external database** — single binary, local files, git for versioning.
 
 ## Context
 
-**Current state.** Every subsystem in the Validated list above is built and in
-use. The gap between what exists and the vision is not the engine — it is that
-there is no single surface over it, the pile holds no structural relations, and
-tenders run one-way.
+**Current state.** Far more of the vision is built than the vision assumed.
+`hugel garden` already renders every bed's work with Tab to the knowledge side.
+The attention concept already exists, sourced from bd's `needs-attention` label,
+sorted first, and withheld from tenders. `cochange` already derives code↔code
+coupling from git. Entries already carry `Paths` and `Beads`. The engine is not
+the gap.
 
-**What the pile already knows about this vision.** Three findings bear on it
-directly and were drawn from hugel's own pile:
+**The gap is that almost nothing is recorded.** The pile holds 316 entries and
+zero edges. The event log holds 32 events from two subsystems and has not been
+written to in a week. The draw log holds 20 draws. A graph derived from this
+substrate today would be very nearly empty — which is the finding that reorders
+the roadmap: substrate first, graph second.
 
-1. `hugel tend` is already a working surface bounded by time, with per-group
-   caps, built specifically so a scrolling list could not become an inbox. The
-   garden TUI's pile pane is closer to an evolution of `tend` than a new thing.
-2. The pile has 289 entries and **zero edges of any kind** (`a61ed4f8`).
-   `Link{Rel,ID}` has existed since the pile was built with four declared rel
-   types and not one entry carries a link. Any edge design starts from nothing
-   written, not from a graph needing tidying.
-3. The one edge that has ever been made to work was made to work *mechanically*:
-   a revert links to the decision it falsifies because git writes the original
-   subject, quoted, into the revert's own subject — the join is the title
-   (`6b8b27ac`). Derivable edges get written. Edges needing a person or a model
-   at extraction time do not.
+**What the pile already knows about this vision.** Drawn from hugel's own pile:
 
-**The distinction the attention pane turns on.** The refused inbox is a backlog
-of accumulated pile entries — unbounded, stale, growing with the corpus. What
-this vision calls an inbox is mostly *live*: tenders blocked right now, gate
-refusals from this session. That set is bounded by concurrent work, not by pile
-size, and does not obviously violate the recorded refusal. Keeping the two apart
-is the design problem; letting them share a pane is how the refusal gets undone
-by accident.
+1. The pile has 289 entries and **zero edges of any kind** (`a61ed4f8`).
+   `Link{Rel,ID}` has existed since the pile was built with declared rel types
+   and not one entry carries a link. Any edge design starts from nothing written.
+2. The only edge ever made to work was made to work *mechanically*: a revert
+   links to the decision it falsifies because git writes the original subject
+   into the revert's own subject — the join is the title (`6b8b27ac`).
+3. `internal/cochange` refuses to store its graph on the grounds that every
+   graph hugel kept died with its store, and the entries that survived did so
+   because they were flat files. Storing a graph is a deliberate reversal of
+   that position, taken with the replay requirement attached.
+
+**Why the reversal is defensible.** Derivable-only fails today not because
+derivation is the wrong model, but because the sources derive almost nothing. If
+the substrate is widened so events carry the ids, and bd's dependency edges stop
+being discarded at the boundary, then a stored graph is a cache over durable
+append-only sources rather than an authored artifact — and a lost cache is
+replayed, not mourned.
 
 ## Constraints
 
-- **Token economy**: Every token of soil that enters a session is re-sent on every later turn — cost is set by how much enters and how early, not by how much the pile holds. Any always-on TUI context must answer to this.
-- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), no ORM, no config library, no server — token-efficiency and single-binary distribution are design goals, not incidental.
+- **Token economy**: Every token of soil that enters a session is re-sent on every later turn — cost is set by how much enters and how early, not by how much the pile holds. A resident TUI must answer to this.
+- **Substrate before projection**: No derived structure may be the only record of a fact. Events store ids rather than counts, and the draw log already proves why — store the count and the measurement does not exist.
+- **The graph is rebuildable or it is not kept**: Storing it is conditional on being able to drop and replay it from events, entries and git.
+- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), no ORM, no config library, no server.
 - **External tools**: `git` and `tmux` required; `bd` and `claude` optional at the boundaries.
 - **Irreversibility**: Landing is the one step that cannot be undone by deleting a directory — every stage before it is built to refuse.
 - **Provenance**: Entries, sessions and landings are immutable facts; review and status are mutable judgement wrapped around them. Nothing may collapse the two.
@@ -97,11 +126,12 @@ by accident.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| `hugel garden` becomes the primary entry point | One surface to sit in front of; six commands that each do one thing cannot be sat in front of | — Pending |
-| Attention pane scoped to live work, not accumulated backlog | Preserves the recorded refusal of an inbox while still surfacing what blocks the gardener now | — Pending |
-| Edges must be mechanically derivable to be worth declaring | The only edge that ever worked joined on a title git already wrote; human- and LLM-authored edges are measured at zero | — Pending |
+| `hugel garden` becomes session-persistent rather than a one-shot render | It is the thing logged into and left open; today it surveys, draws and exits | — Pending |
+| The attention list stays sourced solely from bd's `needs-attention` label | One source of truth; preserves the no-inbox refusal structurally rather than by discipline | — Pending |
+| The relation graph is stored, not computed on demand | Queryable persistent structure is worth the staleness cost that `cochange` refused | — Pending |
+| A stored graph must be a droppable, replayable projection | Every graph hugel kept died with its store; a cache over append-only sources cannot die the same way | — Pending |
+| Substrate widening precedes the graph | 32 events from two subsystems and a discarded bd dependency graph would derive nothing | — Pending |
 | GSD drives the work loop; hugel supplies context and captures findings | Avoids hugel growing a second planner alongside the one already in use | — Pending |
-| Tender relay becomes bidirectional | Today tenders are detached and one-way; bubbling up a blocking question is what makes unattended work safe to leave unattended | — Pending |
 
 ## Evolution
 
