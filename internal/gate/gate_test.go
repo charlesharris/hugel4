@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -350,6 +351,63 @@ func TestARefusalIsReconstructableFromEventsAlone(t *testing.T) {
 	// being unrecorded until someone reads its worktree.
 	if ms, _ := run.Fields["tender_duration_ms"].(float64); ms < 1000 {
 		t.Errorf("tender_duration_ms = %v, want the tender's extent", ms)
+	}
+}
+
+// A gate whose event log cannot be written at all must still reach and return
+// its verdict unchanged, and tell the gardener on stderr what it lost. An
+// instrument that can break the thing it measures is worse than no instrument.
+func TestAGateStillReachesItsVerdictWhenTheLogCannotBeWritten(t *testing.T) {
+	garden := filepath.Join(t.TempDir(), "unwritable")
+	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HUGEL_HOME", garden)
+
+	dir := t.TempDir()
+	work := filepath.Join(dir, "bed")
+	os.MkdirAll(work, 0o755)
+	td := tender.Tender{
+		Bead: "x-1", Bed: "somebed", Worktree: work,
+		Branch: "hugel/x-1", Started: time.Now().Add(-time.Minute),
+	}
+	os.WriteFile(td.ResultPath(), []byte("## Outcome\ndone\n"), 0o644)
+
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	captured := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		captured <- string(b)
+	}()
+
+	rep, runErr := Run(Options{
+		Tender: td, Test: "echo 'FAIL: the thing is broken' && exit 1",
+		Into: "main", Remote: "origin",
+	})
+
+	w.Close()
+	os.Stderr = oldStderr
+	stderrOutput := <-captured
+
+	if runErr != nil {
+		t.Fatalf("Run returned an error: %v", runErr)
+	}
+	if rep.Passed {
+		t.Fatalf("expected a refusal, got %+v", rep)
+	}
+	if !strings.Contains(rep.Why, "tests fail") {
+		t.Errorf("rep.Why = %q, want it to mention that tests fail", rep.Why)
+	}
+	if !strings.Contains(stderrOutput, `event "gate.run" not recorded`) {
+		t.Errorf("stderr did not report the lost gate.run event: %s", stderrOutput)
+	}
+	if n := strings.Count(stderrOutput, "not recorded"); n < 2 {
+		t.Errorf("stderr reported %d lost events, want at least 2 (gate.stage and gate.run): %s", n, stderrOutput)
 	}
 }
 

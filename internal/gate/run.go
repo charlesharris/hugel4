@@ -29,21 +29,23 @@ func Run(o Options) (Report, error) {
 	step := func(s Stage, ok bool, detail string, took time.Duration) {
 		rep.Reached = s
 		rep.Stages = append(rep.Stages, StageResultRecord{Stage: s, OK: ok, Detail: detail, Took: took})
-		events.Emit(events.Event{
+		if err := events.Emit(events.Event{
 			Name: "gate.stage", Bead: t.Bead, Bed: t.Bed,
 			Outcome: outcomeOf(ok), Duration: took,
 			Fields: events.F{
 				"stage": string(s), "detail": detail,
 				"branch": t.Branch, "into": o.Into, "remote": o.Remote,
 			},
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.stage", err)
+		}
 	}
 	// A gate run is itself a unit of work, so it gets its own event. The stages
 	// make a refusal reconstructable; this makes it findable without walking
 	// them, which is the difference between a question that is answerable and
 	// one that is worth asking.
 	finishAs := func(r Report, outcome string) Report {
-		events.Emit(events.Event{
+		if err := events.Emit(events.Event{
 			Name: "gate.run", Bead: t.Bead, Bed: t.Bed,
 			Outcome: outcome, Duration: time.Since(began),
 			Fields: events.F{
@@ -53,7 +55,9 @@ func Run(o Options) (Report, error) {
 				"tender_duration_ms": time.Since(t.Started).Milliseconds(),
 				"spike":              t.Spike,
 			},
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "gate.run", err)
+		}
 		return r
 	}
 	finish := func(r Report) Report { return finishAs(r, outcomeOf(r.Passed)) }

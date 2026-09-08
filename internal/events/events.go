@@ -35,6 +35,7 @@ package events
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -138,39 +139,44 @@ func Path() (string, error) {
 
 var mu sync.Mutex
 
-// Emit records an event, and cannot fail the caller.
+// Emit records an event, and hands the failure back rather than absorbing it.
 //
-// It returns nothing on purpose. Every emitter is inside work that matters more
-// than its own instrumentation — a tender mid-run, a gate about to merge — and
-// an error return is an invitation to propagate it. An instrument that can
-// break the thing it measures is worse than no instrument, so a log that cannot
-// be written loses the event and nothing else.
-func Emit(e Event) {
+// It is the caller's job to report a returned error without letting it fail
+// the work being instrumented — a tender mid-run, a gate about to merge, must
+// not stop or retry because its own log could not be written. An instrument
+// still must not break the thing it measures, but silence is no longer how
+// that is achieved: only the caller knows whether its own work can tolerate a
+// warning, so the package hands the failure up rather than deciding on the
+// caller's behalf that it does not matter.
+func Emit(e Event) error {
 	if e.Time.IsZero() {
 		e.Time = now()
 	}
 	b, err := json.Marshal(e)
 	if err != nil {
-		return
+		return fmt.Errorf("marshal event: %w", err)
 	}
 	p, err := Path()
 	if err != nil {
-		return
+		return fmt.Errorf("resolve event log path: %w", err)
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return
+		return fmt.Errorf("create garden dir: %w", err)
 	}
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return
+		return fmt.Errorf("open event log: %w", err)
 	}
 	defer f.Close()
 	// One write per event: an append of a single line is what keeps concurrent
 	// emitters from interleaving halves of each other's events.
-	_, _ = f.Write(append(b, '\n'))
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		return fmt.Errorf("write event: %w", err)
+	}
+	return nil
 }
 
 // Timer measures a unit of work from here to Done.
