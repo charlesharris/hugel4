@@ -47,6 +47,7 @@ be derived from it, and almost nothing is recorded today.
 
 **Substrate — record what is currently ephemeral**
 
+- [ ] **Make event writes fail loudly** — `events.Record` returns nothing and swallows every error: four bare `return`s and a discarded `f.Write`. A full disk, a permissions change or a bad `HUGEL_HOME` drops events with no signal, and there is no fsync. `draws.Append` already handles this correctly. Until this is fixed, a stale log cannot be distinguished from a failing one.
 - [ ] **Widen event emission** — one wide event per unit of work from every subsystem, not two. Today `~/.hugel/events.jsonl` holds 32 events, all from `gate.*` and `tender.start`, last written 2026-09-01. Nothing from compost, soil, spike, dispatch, review, land or handback.
 - [ ] **Stop discarding bd's dependency graph** — `beads.Bead` collapses dependencies, defer dates and gates into `Ready bool`. bd knows the ticket↔ticket edges; hugel drops them at the boundary. Carry them without recomputing readiness.
 - [ ] **Enrich what a bead carries** — the structural context a graph needs must live somewhere durable and re-readable, in bd or beside it.
@@ -54,7 +55,7 @@ be derived from it, and almost nothing is recorded today.
 
 **Graph — projected over the substrate**
 
-- [ ] **Stored relation graph** — a queryable graph of code↔code, code↔ticket, ticket↔ticket and entry↔entry relations. Stored, on the explicit understanding that it is a projection: droppable and rebuildable by replaying events, entries and git, so a migration has nothing irreplaceable to lose.
+- [ ] **Stored relation graph, in SQLite** — a queryable graph of code↔code, code↔ticket, ticket↔ticket and entry↔entry relations, projected from the JSONL logs, the pile and git. Droppable and rebuildable by replay, so a migration has nothing irreplaceable to lose. Pure-Go driver (`modernc.org/sqlite`) keeps `go build` yielding one binary with no cgo and no server.
 - [ ] **Graph in the draw path** — soil ranking consults structure, not only wording. `cochange` already proves the shape of this.
 
 **Surface**
@@ -75,7 +76,8 @@ be derived from it, and almost nothing is recorded today.
 - **LLM edge inference at extraction time** — built once already and left nothing behind (`680d9417`).
 - **A graph that cannot be rebuilt** — every graph hugel has kept died with the store it lived in (`internal/cochange/cochange.go`). Storing one is only acceptable while it remains a projection over durable sources.
 - **Hugel writing bd content** — lifecycle transitions only (`Close`, `HandBack`, `Release`).
-- **A server, or any external database** — single binary, local files, git for versioning.
+- **A clustered or server-backed log (Cassandra, Kafka, Postgres)** — write volume is ~5 events/day against tooling built for six-figure writes/sec, and any of them breaks the single-binary constraint: `hugel garden` would stop working when the cluster is down. The recorded regret runs the other way — every graph hugel kept died with the store it lived in, while flat files survived. JSONL→anything is replaying a text file; Cassandra→anything is a project.
+- **A server, or any external database** — single binary, local files, git for versioning. SQLite as a droppable projection is the one exception, and only because it is rebuildable.
 
 ## Context
 
@@ -117,6 +119,7 @@ replayed, not mourned.
 - **Token economy**: Every token of soil that enters a session is re-sent on every later turn — cost is set by how much enters and how early, not by how much the pile holds. A resident TUI must answer to this.
 - **Substrate before projection**: No derived structure may be the only record of a fact. Events store ids rather than counts, and the draw log already proves why — store the count and the measurement does not exist.
 - **The graph is rebuildable or it is not kept**: Storing it is conditional on being able to drop and replay it from events, entries and git.
+- **Log and projection are different things**: JSONL append-only files are the durable source of truth — human-readable, replayable, and the format that has actually survived. SQLite holds only what is derived from them. Nothing may exist solely in the projection.
 - **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), no ORM, no config library, no server.
 - **External tools**: `git` and `tmux` required; `bd` and `claude` optional at the boundaries.
 - **Irreversibility**: Landing is the one step that cannot be undone by deleting a directory — every stage before it is built to refuse.
@@ -130,6 +133,8 @@ replayed, not mourned.
 | The attention list stays sourced solely from bd's `needs-attention` label | One source of truth; preserves the no-inbox refusal structurally rather than by discipline | — Pending |
 | The relation graph is stored, not computed on demand | Queryable persistent structure is worth the staleness cost that `cochange` refused | — Pending |
 | A stored graph must be a droppable, replayable projection | Every graph hugel kept died with its store; a cache over append-only sources cannot die the same way | — Pending |
+| JSONL stays the log; SQLite is the projection over it | Gives indexed graph queries without a server, and a cache that cannot die with its store because it is replayed | — Pending |
+| Cassandra and server-backed logs rejected | ~5 events/day against tooling for six-figure writes/sec, and a live cluster would become a runtime dependency of a single-binary CLI | — Pending |
 | Substrate widening precedes the graph | 32 events from two subsystems and a discarded bd dependency graph would derive nothing | — Pending |
 | GSD drives the work loop; hugel supplies context and captures findings | Avoids hugel growing a second planner alongside the one already in use | — Pending |
 
