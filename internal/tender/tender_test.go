@@ -1,6 +1,7 @@
 package tender
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -433,6 +434,44 @@ func TestATenderWithNoSessionIsNotRunning(t *testing.T) {
 	}
 	if err := Stop(nameless, false); err != nil {
 		t.Errorf("Stop on a nameless tender: %v", err)
+	}
+}
+
+// Stop is one of the last things a tender does, and it must complete even
+// when the event log cannot be written -- the worktree still has to be
+// cleaned up, and the gardener still has to be told the record was lost.
+func TestATenderStopsEvenWhenTheLogCannotBeWritten(t *testing.T) {
+	garden := filepath.Join(t.TempDir(), "unwritable")
+	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HUGEL_HOME", garden)
+
+	var nameless Tender
+
+	oldStderr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	captured := make(chan string, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		captured <- string(b)
+	}()
+
+	stopErr := Stop(nameless, false)
+
+	w.Close()
+	os.Stderr = oldStderr
+	stderrOutput := <-captured
+
+	if stopErr != nil {
+		t.Fatalf("Stop returned an error: %v", stopErr)
+	}
+	if !strings.Contains(stderrOutput, `event "tender.stop" not recorded`) {
+		t.Errorf("stderr did not report the lost tender.stop event: %s", stderrOutput)
 	}
 }
 

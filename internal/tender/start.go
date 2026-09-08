@@ -114,16 +114,18 @@ func Start(o Options) (*Tender, error) {
 	args = append(args, prompt)
 	if err := tmux(args...); err != nil {
 		_ = git(o.Repo, "worktree", "remove", "--force", t.Worktree)
-		events.Emit(events.Event{
+		if err := events.Emit(events.Event{
 			Name: "tender.start", Bead: t.Bead, Bed: t.Bed, Outcome: "failed",
 			Fields: events.F{"error": err.Error()},
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "tender.start", err)
+		}
 		return nil, err
 	}
 	// Everything known at the moment work begins. A tender's life has to be
 	// reconstructable without reading its worktree, because the worktree is the
 	// first thing thrown away when someone tidies up.
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "tender.start", Bead: t.Bead, Bed: t.Bed, Outcome: "ok",
 		Fields: events.F{
 			"title": o.Bead.Title, "type": o.Bead.Type, "priority": o.Bead.Priority,
@@ -132,7 +134,9 @@ func Start(o Options) (*Tender, error) {
 			"has_criteria": strings.TrimSpace(o.Bead.Accept) != "",
 			"brief_bytes":  len(brief), "skip_permissions": o.SkipPermissions,
 		},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "tender.start", err)
+	}
 	return t, nil
 }
 
@@ -336,11 +340,13 @@ the exploration came to.
 // The worktree is kept by default. A run that went wrong is the most useful
 // thing in the garden until someone has read it.
 func Stop(t Tender, removeWorktree bool) error {
-	events.Emit(events.Event{
+	if err := events.Emit(events.Event{
 		Name: "tender.stop", Bead: t.Bead, Bed: t.Bed, Outcome: t.State(),
 		Duration: time.Since(t.Started),
 		Fields:   events.F{"worktree_removed": removeWorktree, "branch": t.Branch},
-	})
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "hugel: event %q not recorded: %v\n", "tender.stop", err)
+	}
 	if t.Running() {
 		if err := tmux("kill-session", "-t", t.Session); err != nil {
 			return err
