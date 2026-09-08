@@ -71,39 +71,50 @@ Deferred. Tracked but not in the current roadmap.
 
 ## Traceability
 
-Filled during roadmap creation.
+Every v1 requirement maps to exactly one phase. Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | — | Pending |
-| SUB-02 | — | Pending |
-| SUB-03 | — | Pending |
-| SUB-04 | — | Pending |
-| SUB-05 | — | Pending |
-| SUB-06 | — | Pending |
-| SUB-07 | — | Pending |
-| SUB-08 | — | Pending |
-| SUB-09 | — | Pending |
-| SUB-10 | — | Pending |
-| SUB-11 | — | Pending |
-| GRAPH-01 | — | Pending |
-| GRAPH-02 | — | Pending |
-| GRAPH-03 | — | Pending |
-| GRAPH-04 | — | Pending |
-| GRAPH-05 | — | Pending |
-| GRAPH-06 | — | Pending |
-| SURF-01 | — | Pending |
-| SURF-02 | — | Pending |
-| SURF-03 | — | Pending |
-| LOOP-01 | — | Pending |
-| LOOP-02 | — | Pending |
-| LOOP-03 | — | Pending |
+| SUB-01 | Phase 1 | Pending |
+| SUB-02 | Phase 1 | Pending |
+| SUB-03 | Phase 1 | Pending |
+| SUB-04 | Phase 2 | Pending |
+| SUB-05 | Phase 2 | Pending |
+| SUB-06 | Phase 2 | Pending |
+| SUB-07 | Phase 2 | Pending |
+| SUB-08 | Phase 2 | Pending |
+| SUB-09 | Phase 3 | Pending |
+| SUB-10 | Phase 3 | Pending |
+| SUB-11 | Phase 3 | Pending |
+| GRAPH-01 | Phase 4 | Pending |
+| GRAPH-02 | Phase 4 | Pending |
+| GRAPH-03 | Phase 4 | Pending |
+| GRAPH-04 | Phase 4 | Pending |
+| GRAPH-05 | Phase 4 | Pending |
+| GRAPH-06 | Phase 4 | Pending |
+| SURF-01 | Phase 5 | Pending |
+| SURF-02 | Phase 5 | Pending |
+| SURF-03 | Phase 5 | Pending |
+| LOOP-01 | Phase 6 | Pending |
+| LOOP-02 | Phase 6 | Pending |
+| LOOP-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 23 total
-- Mapped to phases: 0
-- Unmapped: 23 ⚠️
+- Mapped to phases: 23 ✓
+- Unmapped: 0
+
+**By phase:**
+
+| Phase | Requirements |
+|-------|--------------|
+| 1. Trustworthy Event Writes | SUB-01, SUB-02, SUB-03 |
+| 2. Wide Events From Every Subsystem | SUB-04, SUB-05, SUB-06, SUB-07, SUB-08 |
+| 3. Relations The Event Log Cannot Carry | SUB-09, SUB-10, SUB-11 |
+| 4. The Stored Relation Graph | GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06 |
+| 5. The Resident Garden | SURF-01, SURF-02, SURF-03 |
+| 6. The Work Loop Closes | LOOP-01, LOOP-02, LOOP-03 |
 
 ---
 *Requirements defined: 2026-09-08*
-*Last updated: 2026-09-08 after initial definition*
+*Last updated: 2026-09-08 after roadmap creation (traceability filled)*
