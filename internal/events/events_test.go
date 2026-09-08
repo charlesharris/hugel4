@@ -26,11 +26,13 @@ func TestEmitAndLoadRoundTrip(t *testing.T) {
 		t.Fatalf("Load on a fresh garden = %v, %v; want nothing and no error", got, err)
 	}
 
-	Emit(Event{
+	if err := Emit(Event{
 		Name: "gate.stage", Bead: "hugel4-51v.1", Bed: "hugel4",
 		Session: "sess-1", Outcome: "ok", Duration: 1500 * time.Millisecond,
 		Fields: F{"stage": "retest", "test": "make test", "entries": []string{"a", "b"}},
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := Load()
 	if err != nil {
@@ -116,7 +118,9 @@ func TestEmptyCoreFieldsAreOmitted(t *testing.T) {
 // line. One bad line must cost one event, never the history.
 func TestCorruptLineCostsOneEvent(t *testing.T) {
 	t.Setenv("HUGEL_HOME", t.TempDir())
-	Emit(Event{Name: "first"})
+	if err := Emit(Event{Name: "first"}); err != nil {
+		t.Fatal(err)
+	}
 	p, _ := Path()
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -124,7 +128,9 @@ func TestCorruptLineCostsOneEvent(t *testing.T) {
 	}
 	f.WriteString("{not json at all\n")
 	f.Close()
-	Emit(Event{Name: "third"})
+	if err := Emit(Event{Name: "third"}); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := Load()
 	if err != nil {
@@ -136,21 +142,27 @@ func TestCorruptLineCostsOneEvent(t *testing.T) {
 }
 
 // Every emitter is inside work that matters more than its own instrumentation.
-// A log that cannot be written loses the event and nothing else.
-func TestEmitCannotFailTheCaller(t *testing.T) {
+// A log that cannot be written must not panic the caller -- but a silently
+// broken write can no longer pass as though nothing happened either.
+func TestEmitReturnsAnErrorWhenTheLogCannotBeWritten(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HUGEL_HOME", garden)
 
-	done := make(chan bool, 1)
+	errs := make(chan error, 1)
 	go func() {
-		defer func() { done <- recover() == nil }()
-		Emit(Event{Name: "into the void", Bead: "x-1"})
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Emit panicked when the log could not be written: %v", r)
+				errs <- nil
+			}
+		}()
+		errs <- Emit(Event{Name: "into the void", Bead: "x-1"})
 	}()
-	if !<-done {
-		t.Fatal("Emit panicked when the log could not be written")
+	if err := <-errs; err == nil || !strings.Contains(err.Error(), "create garden dir") {
+		t.Fatalf("Emit err = %v, want an error mentioning %q", err, "create garden dir")
 	}
 }
 
@@ -163,9 +175,11 @@ func TestConcurrentEmittersDoNotInterleave(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			Emit(Event{Name: "concurrent", Bead: "x", Fields: F{
+			if err := Emit(Event{Name: "concurrent", Bead: "x", Fields: F{
 				"i": i, "padding": strings.Repeat("wide events are wide ", 300),
-			}})
+			}}); err != nil {
+				t.Errorf("Emit: %v", err)
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -226,7 +240,7 @@ func TestEmittingWithoutATemporaryGardenFailsTheTest(t *testing.T) {
 	done := make(chan any, 1)
 	go func() {
 		defer func() { done <- recover() }()
-		Emit(Event{Name: "gate.stage", Bead: "x-1"})
+		_ = Emit(Event{Name: "gate.stage", Bead: "x-1"})
 	}()
 	if r := <-done; r == nil {
 		t.Fatal("Emit wrote to the gardener's real events log instead of failing")
