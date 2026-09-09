@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Trustworthy Event Writes
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-09-09T02:03:34.911Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-09-09T02:11:36.448Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 01 execution started
-state_head: 8a749ec711171c4d6f3fbaf07299789e13eb2c01
+state_head: 66563ba4553e892ccf4d69c7fa2e2421b7c81137
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 01 (Trustworthy Event Writes) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-09-08 — Phase 01 execution started
 
@@ -61,6 +61,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 16 min | 2 tasks | 4 files |
 | Phase 01 P02 | 13 min | 2 tasks | 5 files |
 | Phase 01 P03 | 4min | 2 tasks | 4 files |
+| Phase 01 P04 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Reused the err identifier at all three tender/start.go events.Emit sites (including the tmux-failure branch) rather than renaming, after confirming Go short-var-decl scoping keeps the outer tmux err intact through the shadowing inner if. — Satisfies both the plan's literal acceptance-criteria grep and its underlying concern that a failed event write must never displace the real error a caller returns.
 - [Phase 01]: [Phase 01]: Sync is a plain checked statement in Emit, never deferred/discarded; Timer.Done given the same error contract as Emit ahead of phase 2 adopting it — RESEARCH.md Pitfall 3 and Open Question 1
 - [Phase 01]: [Phase 01]: Task 1's TDD RED phase could not fail genuinely — Emit's pre-existing defer f.Close() already flushes to the OS page cache before return, so fresh-handle readability held before Sync was added; collapsed to one feat commit per the 01-01 precedent — investigated per TDD error_handling guidance, not a planning defect
+- [Phase 01]: [Phase 01]: TDD RED phases for the marker and HealthOf stubbed the new identifiers (no-op bodies / fixed-zero-value return) rather than omitting them, since Go's whole-package compilation turns a test calling an undefined function into a build failure rather than a genuine assertion-level RED — the GREEN commit fills in the real body
+- [Phase 01]: [Phase 01]: HealthOf demotes Reachable to false when the log itself cannot be stat'd for any reason other than not-exist (e.g. permission-denied), rather than deriving reachability from the garden directory alone, so a partially-unreadable garden cannot present as reachable-but-never-written
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-09T02:03:34.896Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-09-09T02:11:30.430Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
