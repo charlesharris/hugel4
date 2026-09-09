@@ -38,12 +38,31 @@ It reads Claude Code's session transcripts from `~/.claude/projects` and writes
 nothing. Override the source with `--root` or `HUGEL_TRANSCRIPT_ROOT`.
 
 `--health` answers from the garden itself rather than from a transcript, and it
-will say `unknown` rather than guess. A log records its own failures by leaving
-a marker beside itself, so a garden that cannot be written cannot record that it
+says `unknown` rather than guess. A log records its own failures by leaving a
+marker beside itself, so a garden that cannot be written cannot record that it
 could not be written -- and there the absence of a marker means nothing at all.
-Rather than read that silence as good news, `--health` reports `unknown` for any
-garden it could not read *or* write. A healthy answer therefore means writes were
-landing, not merely that no failure was found.
+Rather than read that silence as good news, `--health` checks that a write would
+land before it calls a quiet garden healthy.
+
+What it can promise is narrower than "your writes will work", and worth stating
+exactly:
+
+- A dated failure always wins. If a marker is on disk, `--health` reports the
+  streak and its start; it never answers `unknown` over an answer it already has.
+- `unknown` means hugel could not satisfy itself that the next write would land
+  -- the path refuses writes, or the filesystem has no blocks left. It is not a
+  claim that the garden is unreadable; most gardens that land there read fine.
+- On a filesystem with no free blocks it reports `unknown` slightly early. A
+  one-line append can still fit in the last allocated block, so a write or two
+  may yet land. That window is a few events wide, and the failures after it
+  cannot be marked -- a marker needs an inode too -- so it is flagged rather
+  than waited out.
+- The check is a permission and free-space probe, not a write, so `--health`
+  still writes nothing. It cannot see a quota, a read-only remount that has not
+  taken effect, or a disk that fills between the question and the answer.
+- On non-Unix platforms the probe is not implemented and always answers "a write
+  would land", so `--health` there behaves as it did before the probe existed:
+  it can still call an unwritable garden healthy. hugel targets macOS and Linux.
 
 ### The number that matters
 

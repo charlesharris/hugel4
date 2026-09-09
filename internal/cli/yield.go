@@ -354,12 +354,15 @@ func showHealth(asJSON bool) error {
 	}
 
 	if !h.Reachable {
-		// Not "could not be read": the garden may read perfectly well and
-		// still be unwritable, which is the case health most needs to name --
-		// a log nothing can append to cannot record its own failure, so its
-		// silence proves nothing either way.
-		fmt.Printf("event log:  unknown -- garden at %s could not be read or written\n", h.Home)
-		fmt.Printf("last write: unknown -- garden at %s could not be read or written\n", h.Home)
+		// Not "could not be read": most gardens that land here read perfectly
+		// well. What they have in common is narrower and worth saying exactly
+		// -- hugel could not satisfy itself that the next write would land,
+		// whether because the path refuses writes or because the filesystem
+		// has no blocks left to give. A log that cannot be appended to cannot
+		// record its own failure either, so its silence proves nothing, and
+		// that is the one thing health must never read as good news.
+		fmt.Printf("event log:  unknown -- cannot confirm a write to %s would land\n", h.Home)
+		fmt.Printf("last write: unknown -- cannot confirm a write to %s would land\n", h.Home)
 		return nil
 	}
 
