@@ -139,6 +139,33 @@ func Path() (string, error) {
 
 var mu sync.Mutex
 
+// failMarkPath is the marker whose modification time is the whole payload: a
+// zero-byte file at $HUGEL_HOME/events.failing-since, answering "since when"
+// rather than "how many". It follows compostMark's idiom
+// (internal/cli/compost.go) of a timestamp carried by mtime rather than by
+// content — one syscall to read, and touching it is the entire write.
+func failMarkPath() (string, error) {
+	home, err := config.Home()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, "events.failing-since"), nil
+}
+
+// markFailing records that a write just failed, but only if this is the first
+// failure of the current streak.
+//
+// TODO(RED): stubbed to a no-op for the RED phase of this task's TDD cycle —
+// the GREEN commit gives this its real O_CREATE|O_EXCL body.
+func markFailing() {}
+
+// clearFailing ends a failing streak, unconditionally, on the next successful
+// write.
+//
+// TODO(RED): stubbed to a no-op for the RED phase of this task's TDD cycle —
+// the GREEN commit gives this its real os.Remove body.
+func clearFailing() {}
+
 // Emit records an event, and hands the failure back rather than absorbing it.
 //
 // It is the caller's job to report a returned error without letting it fail

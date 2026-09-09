@@ -263,6 +263,136 @@ func TestNilTimerIsHarmless(t *testing.T) {
 	}
 }
 
+// A write that fails while the garden is writable leaves a marker beside the
+// log, dated to the failure.
+func TestAFailedWriteMarksTheGardenAsFailing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Standing in for the log with a directory makes every open of it fail
+	// with "is a directory", while leaving the garden itself writable -- the
+	// partial-failure seam, as opposed to an unreachable garden.
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Emit(Event{Name: "into the log"}); err == nil {
+		t.Fatal("Emit = nil error, want one: the log path is a directory")
+	}
+
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mark); err != nil {
+		t.Errorf("failure marker missing after a failed write: %v", err)
+	}
+}
+
+// Without the exclusive create, every failure would re-stamp the marker and
+// health would forever report "failing since just now" -- the one fact the
+// marker exists to carry.
+func TestTheFailureMarkKeepsTheFirstFailuresTime(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Emit(Event{Name: "first failure"}); err == nil {
+		t.Fatal("Emit = nil error, want one")
+	}
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	backdated := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(mark, backdated, backdated); err != nil {
+		t.Fatalf("could not backdate the marker (was it created?): %v", err)
+	}
+
+	if err := Emit(Event{Name: "second failure, an hour later"}); err == nil {
+		t.Fatal("Emit = nil error, want one")
+	}
+
+	st, err := os.Stat(mark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.ModTime().Equal(backdated) {
+		t.Errorf("marker mtime = %v, want it pinned at the backdated %v", st.ModTime(), backdated)
+	}
+}
+
+// The first write that gets through ends the streak.
+func TestASuccessfulWriteClearsTheFailureMark(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Emit(Event{Name: "failing"}); err == nil {
+		t.Fatal("Emit = nil error, want one")
+	}
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mark); err != nil {
+		t.Fatalf("marker missing before the fix, can't test that it clears: %v", err)
+	}
+	// Stand the log path back up as an ordinary file so writes can succeed.
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Emit(Event{Name: "succeeding"}); err != nil {
+		t.Fatalf("Emit = %v, want nil now that the log path is writable", err)
+	}
+
+	if _, err := os.Stat(mark); !os.IsNotExist(err) {
+		t.Errorf("marker stat err = %v, want IsNotExist -- the successful write should have cleared it", err)
+	}
+}
+
+// The chicken-and-egg case: a log that cannot be written cannot record its
+// own failure either. The stderr notice at the time of the command is the
+// only channel that works here; the marker is a best-effort retrospective
+// signal, not a substitute for it.
+func TestAnUnreachableGardenCannotBeMarked(t *testing.T) {
+	garden := filepath.Join(t.TempDir(), "unwritable")
+	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HUGEL_HOME", garden)
+
+	if err := Emit(Event{Name: "into the void"}); err == nil {
+		t.Fatal("Emit = nil error, want one")
+	}
+
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The garden itself is unreachable, so os.Stat on any path beneath it
+	// fails with "not a directory" rather than "not exist" -- what matters is
+	// that no marker was written, not the errno's exact shape.
+	if _, err := os.Stat(mark); err == nil {
+		t.Error("stat on the failure marker succeeded -- an unreachable garden has nowhere to put one")
+	}
+}
+
 // Sandbox's own guard against resolving the gardener's real garden inside a
 // test. Every other error an emitter meets is now returned and reported by
 // its caller, but a test that resolved the real garden must not be allowed to
