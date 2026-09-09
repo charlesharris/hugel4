@@ -29,6 +29,7 @@ usage:
   hugel yield --soil                         whether the pile is asked, and whether it was right
   hugel yield --changes                      what a landed change cost
   hugel yield --spikes                       whether exploring paid for itself
+  hugel yield --health                       whether the event log is being written
 
 flags:
 `)
@@ -44,11 +45,16 @@ flags:
 		soilRep  = fs.Bool("soil", false, "report draws from the pile rather than spend")
 		changes  = fs.Bool("changes", false, "report what each landed bead cost")
 		spikes   = fs.Bool("spikes", false, "report what each spike put in the pile and what came of it")
+		health   = fs.Bool("health", false, "report whether the event log is being written")
 		asJSON   = fs.Bool("json", false, "emit JSON")
 		root     = fs.String("root", "", "transcript root (default ~/.claude/projects)")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if *health {
+		return showHealth(*asJSON)
 	}
 
 	dir := *root
@@ -324,6 +330,47 @@ func showSoil(sessions []*transcript.Session, f yield.Filter, asJSON bool) error
 		rep.Judged(), rep.Distinct, rep.Accepted, rep.Rejected, rep.Precision()*100)
 	if rep.Missing > 0 {
 		fmt.Printf("  gone       %d drawn entries are no longer in the pile\n", rep.Missing)
+	}
+	return nil
+}
+
+// showHealth answers the question a gardener cannot answer by eye: is the
+// event log being written, and when was it last written.
+//
+// It reads events.HealthOf and nothing else -- no transcript, no pile, no
+// draw log -- so it can answer on a machine that has never run a session, and
+// its only failure is the one HealthOf returns when the garden's location
+// cannot be resolved at all. An unreachable or never-written garden is not a
+// failure; it is an answer, and this view prints it and returns nil.
+func showHealth(asJSON bool) error {
+	h, err := events.HealthOf()
+	if err != nil {
+		return err
+	}
+	if asJSON {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(h)
+	}
+
+	if !h.Reachable {
+		fmt.Printf("event log:  unknown -- garden could not be read at %s\n", h.Home)
+		fmt.Printf("last write: unknown -- garden could not be read at %s\n", h.Home)
+		return nil
+	}
+
+	if h.FailingSince != nil {
+		fmt.Printf("event log:  FAILING since %s (%s)\n",
+			h.FailingSince.Format("2006-01-02 15:04"), short(time.Since(*h.FailingSince)))
+	} else {
+		fmt.Println("event log:  healthy")
+	}
+
+	if h.LastWrite == nil {
+		fmt.Println("last write: never -- nothing has been recorded yet")
+	} else {
+		fmt.Printf("last write: %s (%s ago)\n",
+			h.LastWrite.Format("2006-01-02 15:04"), short(time.Since(*h.LastWrite)))
 	}
 	return nil
 }

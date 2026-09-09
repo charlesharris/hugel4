@@ -82,6 +82,7 @@ var Spec = []Command{
 		{Name: "soil", Desc: "report draws from the pile rather than spend", Bool: true},
 		{Name: "changes", Desc: "report what each landed bead cost", Bool: true},
 		{Name: "spikes", Desc: "report what each spike put in the pile", Bool: true},
+		{Name: "health", Desc: "whether the event log is being written", Bool: true},
 		{Name: "json", Desc: "emit JSON", Bool: true},
 		{Name: "root", Desc: "transcript root", Arg: Dirs},
 	}},

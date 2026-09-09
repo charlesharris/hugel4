@@ -31,6 +31,7 @@ hugel yield --sessions         one line per session, dearest first
 hugel yield --session ID       request-by-request, to find a spiral
 hugel yield --soil             whether the pile is asked, and whether it was right
 hugel yield --changes          what a landed change cost
+hugel yield --health           whether the event log is being written
 ```
 
 It reads Claude Code's session transcripts from `~/.claude/projects` and writes
