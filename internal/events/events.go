@@ -392,29 +392,6 @@ func HealthOf() (Health, error) {
 		return h, nil
 	}
 
-	// Everything above this line answers "can the garden be read". The
-	// failure this type exists to catch is on the other axis: a garden that
-	// cannot be WRITTEN cannot record its own failure either, because
-	// markFailing puts the marker inside it and gives up quietly. The marker's
-	// absence then means "no failure could be written down", and the line
-	// below would read it as "no failure happened" -- two absences adding up
-	// to a confident, wrong "healthy" for a garden refusing every write.
-	//
-	// So ask, where Emit will ask: the log itself once it exists, since an
-	// append needs nothing from the directory, and the directory while it does
-	// not, since creating the log does. Refusing to answer is the whole point
-	// -- "nothing has run" and "nothing could be recorded" are the two
-	// readings SUB-03 exists to separate, and a garden that cannot be written
-	// is exactly where they become indistinguishable from the outside.
-	probe := home
-	if h.LastWrite != nil {
-		probe = p
-	}
-	if !writable(probe) {
-		h.Reachable = false
-		return h, nil
-	}
-
 	if mark, err := failMarkPath(); err == nil {
 		if st, err := os.Stat(mark); err == nil {
 			if !st.Mode().IsRegular() {
@@ -432,8 +409,44 @@ func HealthOf() (Health, error) {
 		}
 	}
 
+	// Only now, and only if the garden did not already answer. A marker on
+	// disk IS the answer -- it carries the date SUB-03 asks for -- and
+	// replacing that with "unknown" would throw away the good sentence while
+	// holding it. The probe exists for the other case: no marker, which means
+	// either no failure happened or none could be written down, and those two
+	// are indistinguishable from the outside of a garden that refuses writes.
+	if h.FailingSince == nil && !writable(writeTarget(home, p, h.LastWrite != nil)) {
+		h.Reachable = false
+		return h, nil
+	}
+
 	h.Healthy = h.Reachable && h.FailingSince == nil
 	return h, nil
+}
+
+// writeTarget is the path Emit's next write would really need permission on.
+//
+// The log itself once it exists, because an append asks nothing of the
+// directory holding it. Otherwise the nearest ancestor that exists, because
+// Emit creates the garden with MkdirAll, and MkdirAll needs the first
+// directory already on disk to be writable -- everything below it is its own
+// to make. A garden that has not been created yet is not an unwritable one;
+// that is simply a fresh install's first run, and calling it unknown would
+// make hugel's first answer to a new gardener a shrug.
+func writeTarget(home, log string, logExists bool) string {
+	if logExists {
+		return log
+	}
+	for dir := home; ; {
+		if _, err := os.Stat(dir); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return dir
+		}
+		dir = parent
+	}
 }
 
 // Load reads every recorded event, oldest first. A missing log is no events,

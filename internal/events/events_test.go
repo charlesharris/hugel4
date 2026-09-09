@@ -726,6 +726,77 @@ func TestHealthOfStillTrustsAWritableLogInAReadOnlyGarden(t *testing.T) {
 	}
 }
 
+// A garden that does not exist yet is not a garden that refuses writes: Emit
+// makes it with MkdirAll on first use. The writability probe once read the
+// missing directory as unwritable and answered "unknown", which made hugel's
+// very first answer to a new gardener a shrug where it used to be "nothing has
+// run yet". Regression guard.
+func TestHealthOfCallsAnUncreatedGardenFreshRatherThanUnknown(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "not", "created", "yet")
+	t.Setenv("HUGEL_HOME", home)
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Reachable {
+		t.Error("Health.Reachable = false, want true: this garden can be created, it just has not been")
+	}
+	if !h.Healthy {
+		t.Error("Health.Healthy = false, want true: nothing has run, and nothing has failed either")
+	}
+	if h.LastWrite != nil {
+		t.Errorf("Health.LastWrite = %v, want nil", h.LastWrite)
+	}
+	// The claim above is only worth anything if a write really does land.
+	if err := Emit(Event{Name: "first ever", Bead: "x-1"}); err != nil {
+		t.Fatalf("Emit = %v, want nil: the garden should have been created", err)
+	}
+}
+
+// A marker on disk IS the answer -- it carries the date SUB-03 asks for. The
+// probe once ran ahead of the marker stat and replaced "FAILING since <date>,
+// last write <date>" with "unknown", throwing away the exact sentence this
+// requirement exists to produce while holding it. Regression guard.
+func TestHealthOfKeepsADatedFailureRatherThanAnsweringUnknown(t *testing.T) {
+	notRoot(t)
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	if err := Emit(Event{Name: "the last one that landed", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The log refuses writes, but the garden around it does not, so markFailing
+	// can still record the streak -- and having recorded it, health must say so.
+	if err := os.Chmod(p, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(p, 0o600) })
+	if err := Emit(Event{Name: "refused", Bead: "x-1"}); err == nil {
+		t.Fatal("Emit = nil error, want one: the log is not writable")
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.FailingSince == nil {
+		t.Error("Health.FailingSince = nil, want the streak's start: the marker is on disk and dated")
+	}
+	if !h.Reachable {
+		t.Error("Health.Reachable = false, want true: the garden answered, so there is nothing to be unknown about")
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: a streak is open")
+	}
+	if h.LastWrite == nil {
+		t.Error("Health.LastWrite = nil, want the last write that landed")
+	}
+}
+
 func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
