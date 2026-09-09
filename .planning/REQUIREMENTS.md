@@ -12,7 +12,7 @@ projected from it.
 
 - [x] **SUB-01**: `events.Record` returns an error instead of swallowing it, so a caller can tell a written event from a dropped one
 - [x] **SUB-02**: Event writes are flushed durably, so a crash does not silently lose the tail of the log
-- [ ] **SUB-03**: A gardener can distinguish "nothing has run since <date>" from "writes have been failing since <date>" without reading the code
+- [x] **SUB-03**: A gardener can distinguish "nothing has run since <date>" from "writes have been failing since <date>" without reading the code
 - [ ] **SUB-04**: Compost emits a wide event per digested session
 - [ ] **SUB-05**: Soil emits a wide event per draw, carrying the entry ids delivered
 - [ ] **SUB-06**: Spike, dispatch and pile review each emit a wide event per unit of work
@@ -77,7 +77,7 @@ Every v1 requirement maps to exactly one phase. Filled during roadmap creation.
 |-------------|-------|--------|
 | SUB-01 | Phase 1 | Complete |
 | SUB-02 | Phase 1 | Complete |
-| SUB-03 | Phase 1 | Pending |
+| SUB-03 | Phase 1 | Complete |
 | SUB-04 | Phase 2 | Pending |
 | SUB-05 | Phase 2 | Pending |
 | SUB-06 | Phase 2 | Pending |

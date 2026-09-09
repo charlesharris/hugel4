@@ -43,7 +43,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A gardener can ask one question and learn whether the log is healthy and when it was last written, distinguishing "nothing has run since 2026-09-01" from "writes have been failing since 2026-09-01", without reading the code
   4. A failing event write is visible but never destroys the work it was instrumenting — gate and tender still complete, and the gardener is told
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 
 Plans:
 **Wave 1**
@@ -64,7 +64,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-05-PLAN.md — `hugel yield --health`, its completion entry, and package `cli`'s first tests
+- [x] 01-05-PLAN.md — `hugel yield --health`, its completion entry, and package `cli`'s first tests
 
 ### Phase 2: Wide Events From Every Subsystem
 
@@ -144,7 +144,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Trustworthy Event Writes | 4/5 | In Progress|  |
+| 1. Trustworthy Event Writes | 5/5 | In Progress|  |
 | 2. Wide Events From Every Subsystem | 0/TBD | Not started | - |
 | 3. Relations The Event Log Cannot Carry | 0/TBD | Not started | - |
 | 4. The Stored Relation Graph | 0/TBD | Not started | - |
