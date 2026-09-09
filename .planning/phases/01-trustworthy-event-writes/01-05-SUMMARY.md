@@ -55,10 +55,10 @@ coverage:
       - kind: unit
         ref: "internal/cli/yield_test.go#TestHealthShowsNothingHasRunInAFreshGarden"
         status: pass
-      - kind: command
+      - kind: other
         ref: "HUGEL_HOME=$(mktemp -d) go run ./cmd/hugel yield --health --root $(mktemp -d)"
         status: pass
-      - kind: command
+      - kind: other
         ref: "HUGEL_HOME=$(mktemp -d) go run ./cmd/hugel yield --health --json --root $(mktemp -d)"
         status: pass
     human_judgment: false
@@ -91,7 +91,7 @@ coverage:
       - kind: unit
         ref: "internal/complete/spec_test.go#TestSpecMatchesTheFlagsTheCLIRegisters"
         status: pass
-      - kind: command
+      - kind: other
         ref: "go run ./cmd/hugel completion zsh | grep -c -- --health"
         status: pass
     human_judgment: true
