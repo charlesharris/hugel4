@@ -155,16 +155,46 @@ func failMarkPath() (string, error) {
 // markFailing records that a write just failed, but only if this is the first
 // failure of the current streak.
 //
-// TODO(RED): stubbed to a no-op for the RED phase of this task's TDD cycle —
-// the GREEN commit gives this its real O_CREATE|O_EXCL body.
-func markFailing() {}
+// It takes nothing and returns nothing, because there is nothing a caller
+// could do with its own failure: it runs from inside a write path that has
+// already failed. It resolves the marker's path and gives up quietly if that
+// fails -- the chicken-and-egg case HealthOf's doc comment covers, where a
+// garden that cannot be written cannot record its own failure either.
+//
+// The create uses O_CREATE|O_EXCL, not the O_CREATE|O_WRONLY compostMark and
+// markComposted use for a most-recent-write-wins success marker: this marker
+// wants the opposite, first-write-wins. An exists error from O_EXCL (the same
+// call lockGarden already uses, internal/cli/dispatch.go:202) means the
+// streak is already marked and its first-failure time must be left alone; any
+// other error means the garden cannot be written here either.
+func markFailing() {
+	p, err := failMarkPath()
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	f.Close()
+}
 
 // clearFailing ends a failing streak, unconditionally, on the next successful
 // write.
 //
-// TODO(RED): stubbed to a no-op for the RED phase of this task's TDD cycle —
-// the GREEN commit gives this its real os.Remove body.
-func clearFailing() {}
+// One os.Remove whose not-exist error is ignored: a streak that was never
+// marked has nothing to clear, and stat-then-remove would be two syscalls to
+// save one at ~5 events/day.
+func clearFailing() {
+	p, err := failMarkPath()
+	if err != nil {
+		return
+	}
+	_ = os.Remove(p)
+}
 
 // Emit records an event, and hands the failure back rather than absorbing it.
 //
@@ -197,17 +227,25 @@ func Emit(e Event) error {
 
 	mu.Lock()
 	defer mu.Unlock()
+	// Only these four failure paths mark: a marshal failure above is a bad
+	// event, not a broken log, and a Path() failure above means the garden's
+	// location is unknown, so there is nowhere to put a marker. Marking on
+	// either would make health report a filesystem problem that does not
+	// exist.
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		markFailing()
 		return fmt.Errorf("create garden dir: %w", err)
 	}
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
+		markFailing()
 		return fmt.Errorf("open event log: %w", err)
 	}
 	defer f.Close()
 	// One write per event: an append of a single line is what keeps concurrent
 	// emitters from interleaving halves of each other's events.
 	if _, err := f.Write(append(b, '\n')); err != nil {
+		markFailing()
 		return fmt.Errorf("write event: %w", err)
 	}
 	// Checked synchronously, not deferred: a deferred Sync could not influence
@@ -215,8 +253,11 @@ func Emit(e Event) error {
 	// the file. Close stays deferred — once Sync has succeeded the bytes are
 	// durable, and a later close failure does not undo that.
 	if err := f.Sync(); err != nil {
+		markFailing()
 		return fmt.Errorf("sync event log: %w", err)
 	}
+	// The first write that gets through ends the streak.
+	clearFailing()
 	return nil
 }
 
