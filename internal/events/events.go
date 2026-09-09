@@ -301,6 +301,41 @@ func (t *Timer) Done(outcome string, fields F) error {
 	return Emit(e)
 }
 
+// Health answers the question a gardener cannot answer by eye: is the garden
+// recording, and if not, since when. LastWrite and FailingSince are the two
+// facts that keep "nothing has run since a date" separate from "writes have
+// been failing since a date" -- together, not as one collapsed boolean.
+type Health struct {
+	// Healthy is true only when the garden was reachable and no failure
+	// streak is open.
+	Healthy bool `json:"healthy"`
+	// Reachable says whether the garden directory itself could be read. A
+	// field rather than an inference: under a wholly inaccessible garden
+	// there is neither a log nor a marker, and reading those two absences as
+	// "healthy, nothing has run" would be the exact wrong answer to the
+	// question this type exists to answer. A log that cannot be written
+	// cannot record its own failure, so health has to be able to say that it
+	// does not know.
+	Reachable bool `json:"reachable"`
+	// Home is the garden directory the answer was read from.
+	Home string `json:"home"`
+	// LastWrite is when the log was last successfully appended to, nil when
+	// it has never been written -- a fact absent rather than a timestamp in
+	// the year 1.
+	LastWrite *time.Time `json:"last_write,omitempty"`
+	// FailingSince is the first failure of the current streak, nil when none
+	// is open.
+	FailingSince *time.Time `json:"failing_since,omitempty"`
+}
+
+// HealthOf reads the garden's health without writing anything.
+//
+// TODO(RED): stubbed to a fixed zero Health for the RED phase of this task's
+// TDD cycle -- the GREEN commit gives this its real Stat-based body.
+func HealthOf() (Health, error) {
+	return Health{}, nil
+}
+
 // Load reads every recorded event, oldest first. A missing log is no events,
 // not an error: a garden that has done nothing yet is a normal garden.
 func Load() ([]Event, error) {

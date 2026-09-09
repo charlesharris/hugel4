@@ -410,3 +410,107 @@ func TestEmittingWithoutATemporaryGardenFailsTheTest(t *testing.T) {
 		t.Fatal("Emit wrote to the gardener's real events log instead of failing")
 	}
 }
+
+// A garden with a written log and no marker: healthy, reachable, LastWrite
+// set, FailingSince nil.
+func TestHealthOfReportsAWrittenLogAsHealthy(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	before := time.Now()
+	if err := Emit(Event{Name: "gate.stage"}); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Healthy || !h.Reachable {
+		t.Errorf("Healthy = %v, Reachable = %v, want both true", h.Healthy, h.Reachable)
+	}
+	if h.LastWrite == nil || h.LastWrite.Before(before) {
+		t.Errorf("LastWrite = %v, want non-nil and recent (after %v)", h.LastWrite, before)
+	}
+	if h.FailingSince != nil {
+		t.Errorf("FailingSince = %v, want nil", h.FailingSince)
+	}
+}
+
+// A garden that exists but has never been written: healthy, reachable, both
+// times nil -- "nothing has run", not "something is wrong".
+func TestHealthOfSaysNothingHasRunInAFreshGarden(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Healthy || !h.Reachable {
+		t.Errorf("Healthy = %v, Reachable = %v, want both true", h.Healthy, h.Reachable)
+	}
+	if h.LastWrite != nil {
+		t.Errorf("LastWrite = %v, want nil in a fresh garden", h.LastWrite)
+	}
+	if h.FailingSince != nil {
+		t.Errorf("FailingSince = %v, want nil in a fresh garden", h.FailingSince)
+	}
+}
+
+// A garden with a marker: not healthy, FailingSince set to the marker's
+// modification time. The marker's creation is task 1's business -- this test
+// constructs the state directly rather than provoking it through Emit.
+func TestHealthOfReportsAFailingStreak(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(mark, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	since := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(mark, since, since); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Healthy = true, want false with an open failure streak")
+	}
+	if h.FailingSince == nil || !h.FailingSince.Equal(since) {
+		t.Errorf("FailingSince = %v, want %v", h.FailingSince, since)
+	}
+}
+
+// A garden that cannot be read: not reachable, not healthy, both times nil,
+// Home naming the path that could not be read -- and no error returned,
+// because this is an answer the command must be able to print.
+func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
+	garden := filepath.Join(t.TempDir(), "unwritable")
+	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HUGEL_HOME", garden)
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatalf("HealthOf err = %v, want nil -- an unreachable garden is an answer, not a failure", err)
+	}
+	if h.Reachable {
+		t.Error("Reachable = true, want false")
+	}
+	if h.Healthy {
+		t.Error("Healthy = true, want false")
+	}
+	if h.LastWrite != nil || h.FailingSince != nil {
+		t.Errorf("LastWrite = %v, FailingSince = %v, want both nil", h.LastWrite, h.FailingSince)
+	}
+	if h.Home != garden {
+		t.Errorf("Home = %q, want %q", h.Home, garden)
+	}
+}
