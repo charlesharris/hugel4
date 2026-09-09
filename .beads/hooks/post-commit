@@ -43,7 +43,8 @@ BEHIND=$(git rev-list --count "$HEAD_SHA"..HEAD 2>/dev/null) || exit 0
 
 printf '\n  note: .planning/STATE.md is %s commits behind HEAD.\n' "$BEHIND" >&2
 printf '        /gsd-next reads it and will misreport until it is refreshed:\n' >&2
-printf '        gsd query state.update "Last Activity" "$(date +%%Y-%%m-%%d)"\n' >&2
-printf '        (any state.update recomputes state_head)\n\n' >&2
+printf '        gsd query state.record-session\n' >&2
+printf '        (any successful state write recomputes state_head; record-session\n' >&2
+printf '         works even when the body-derived field writers do not -- hugel4-983)\n\n' >&2
 
 exit 0
