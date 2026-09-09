@@ -613,6 +613,119 @@ func TestHealthOfWillNotTakeAFailureDateFromSomethingItDidNotWrite(t *testing.T)
 	}
 }
 
+// Root ignores the permission bits these tests turn off, so the states they
+// build do not exist for it.
+func notRoot(t *testing.T) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: permission bits do not apply")
+	}
+}
+
+// The two absences that used to add up to a confident lie. Nothing has been
+// written, and nothing CAN be written, so markFailing could not leave a marker
+// either -- and health used to read the missing marker as "no failures" and
+// answer "healthy, nothing has run yet" for a garden refusing every write.
+// That is SC-3's own worked example answered with the wrong one of its two
+// readings.
+func TestHealthOfWillNotCallAnUnwritableGardenQuiet(t *testing.T) {
+	notRoot(t)
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	if err := os.Chmod(home, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(home, 0o700) })
+
+	// The write really does fail here: that is what makes "healthy" a lie
+	// rather than a harmless approximation.
+	if err := Emit(Event{Name: "refused", Bead: "x-1"}); err == nil {
+		t.Fatal("Emit = nil error, want one: the garden is not writable")
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: every write to this garden is being refused")
+	}
+	if h.Reachable {
+		t.Error("Health.Reachable = true, want false: health cannot tell 'nothing has run' from 'nothing could be recorded' here")
+	}
+}
+
+// The same lie one state over, and the one the log's own mtime makes worse: a
+// log that exists but cannot be appended to, in a garden that cannot take a
+// marker either. Health used to report healthy and quote the last successful
+// write as though it were recent news.
+func TestHealthOfWillNotCallAnUnwritableLogHealthy(t *testing.T) {
+	notRoot(t)
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	if err := Emit(Event{Name: "the last one that landed", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(home, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(home, 0o700); os.Chmod(p, 0o600) })
+
+	if err := Emit(Event{Name: "refused", Bead: "x-1"}); err == nil {
+		t.Fatal("Emit = nil error, want one: the log is not writable")
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: the log cannot be appended to and the failure cannot be marked")
+	}
+}
+
+// The guard against over-correcting. A read-only garden DIRECTORY does not
+// stop an append to a log already inside it -- the directory's bits govern
+// creating and removing entries, not writing through to a file that is already
+// there -- so Emit still succeeds and healthy is the true answer. Demoting
+// here would trade a false alarm for the false silence just fixed, and the
+// probe deliberately asks about the log rather than the directory once the log
+// exists for exactly this reason.
+func TestHealthOfStillTrustsAWritableLogInAReadOnlyGarden(t *testing.T) {
+	notRoot(t)
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	if err := Emit(Event{Name: "first", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(home, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(home, 0o700) })
+
+	if err := Emit(Event{Name: "still lands", Bead: "x-1"}); err != nil {
+		t.Fatalf("Emit = %v, want nil: an append needs nothing from the directory", err)
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Healthy {
+		t.Error("Health.Healthy = false, want true: writes are landing, so this garden is healthy")
+	}
+	if h.LastWrite == nil {
+		t.Error("Health.LastWrite = nil, want the time of the write that just succeeded")
+	}
+}
+
 func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {

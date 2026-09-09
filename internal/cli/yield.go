@@ -354,8 +354,12 @@ func showHealth(asJSON bool) error {
 	}
 
 	if !h.Reachable {
-		fmt.Printf("event log:  unknown -- garden could not be read at %s\n", h.Home)
-		fmt.Printf("last write: unknown -- garden could not be read at %s\n", h.Home)
+		// Not "could not be read": the garden may read perfectly well and
+		// still be unwritable, which is the case health most needs to name --
+		// a log nothing can append to cannot record its own failure, so its
+		// silence proves nothing either way.
+		fmt.Printf("event log:  unknown -- garden at %s could not be read or written\n", h.Home)
+		fmt.Printf("last write: unknown -- garden at %s could not be read or written\n", h.Home)
 		return nil
 	}
 

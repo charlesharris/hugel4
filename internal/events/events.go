@@ -392,6 +392,29 @@ func HealthOf() (Health, error) {
 		return h, nil
 	}
 
+	// Everything above this line answers "can the garden be read". The
+	// failure this type exists to catch is on the other axis: a garden that
+	// cannot be WRITTEN cannot record its own failure either, because
+	// markFailing puts the marker inside it and gives up quietly. The marker's
+	// absence then means "no failure could be written down", and the line
+	// below would read it as "no failure happened" -- two absences adding up
+	// to a confident, wrong "healthy" for a garden refusing every write.
+	//
+	// So ask, where Emit will ask: the log itself once it exists, since an
+	// append needs nothing from the directory, and the directory while it does
+	// not, since creating the log does. Refusing to answer is the whole point
+	// -- "nothing has run" and "nothing could be recorded" are the two
+	// readings SUB-03 exists to separate, and a garden that cannot be written
+	// is exactly where they become indistinguishable from the outside.
+	probe := home
+	if h.LastWrite != nil {
+		probe = p
+	}
+	if !writable(probe) {
+		h.Reachable = false
+		return h, nil
+	}
+
 	if mark, err := failMarkPath(); err == nil {
 		if st, err := os.Stat(mark); err == nil {
 			if !st.Mode().IsRegular() {

@@ -37,6 +37,14 @@ hugel yield --health           whether the event log is being written
 It reads Claude Code's session transcripts from `~/.claude/projects` and writes
 nothing. Override the source with `--root` or `HUGEL_TRANSCRIPT_ROOT`.
 
+`--health` answers from the garden itself rather than from a transcript, and it
+will say `unknown` rather than guess. A log records its own failures by leaving
+a marker beside itself, so a garden that cannot be written cannot record that it
+could not be written -- and there the absence of a marker means nothing at all.
+Rather than read that silence as good news, `--health` reports `unknown` for any
+garden it could not read *or* write. A healthy answer therefore means writes were
+landing, not merely that no failure was found.
+
 ### The number that matters
 
 **Context tax** is the share of spend that went to re-reading the conversation
