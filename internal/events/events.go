@@ -330,10 +330,56 @@ type Health struct {
 
 // HealthOf reads the garden's health without writing anything.
 //
-// TODO(RED): stubbed to a fixed zero Health for the RED phase of this task's
-// TDD cycle -- the GREEN commit gives this its real Stat-based body.
+// It returns an error only when the garden's location cannot be resolved at
+// all -- a garden whose location is unknown has no state to report. An
+// unreachable garden is not that: it is an answer, and hugel yield --health
+// must be able to print it and exit 0.
 func HealthOf() (Health, error) {
-	return Health{}, nil
+	p, err := Path()
+	if err != nil {
+		return Health{}, err
+	}
+	home := filepath.Dir(p)
+	h := Health{Home: home}
+
+	// A not-exist error means a garden that has not been created yet -- fine,
+	// and still reachable. Any other error, or a successful stat of something
+	// that is not a directory, means it cannot be read.
+	st, err := os.Stat(home)
+	switch {
+	case os.IsNotExist(err):
+		h.Reachable = true
+	case err != nil:
+		h.Reachable = false
+	case !st.IsDir():
+		h.Reachable = false
+	default:
+		h.Reachable = true
+	}
+	if !h.Reachable {
+		return h, nil
+	}
+
+	if st, err := os.Stat(p); err == nil {
+		t := st.ModTime()
+		h.LastWrite = &t
+	} else if !os.IsNotExist(err) {
+		// A permission-denied garden looks like this: reachable enough to
+		// stat the directory, but its contents cannot be read. Demote the
+		// whole answer to unreachable rather than reporting a partial one.
+		h.Reachable = false
+		return h, nil
+	}
+
+	if mark, err := failMarkPath(); err == nil {
+		if st, err := os.Stat(mark); err == nil {
+			t := st.ModTime()
+			h.FailingSince = &t
+		}
+	}
+
+	h.Healthy = h.Reachable && h.FailingSince == nil
+	return h, nil
 }
 
 // Load reads every recorded event, oldest first. A missing log is no events,
