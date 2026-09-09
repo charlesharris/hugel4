@@ -1,0 +1,79 @@
+#!/usr/bin/env sh
+# Not managed by beads. Beads owns prepare-commit-msg; this file is ours and is
+# left alone by `bd` upgrades. If beads ever ships its own commit-msg hook,
+# merge rather than replace, and keep its BEGIN/END markers intact.
+#
+# Requires every commit to name the bead it belongs to, so that history can be
+# read backwards: any commit -> a bead -> why the work happened. The granularity
+# rules that matter most (one logical change per commit, code separate from
+# planning artifacts) cannot be enforced by a hook and live in CLAUDE.md.
+#
+# Escape hatch, for the genuinely untracked commit only:
+#     Bead: none — <reason>
+# It is deliberately more typing than filing a bead, and it leaves the reason in
+# the history where it can be argued with later. `--no-verify` leaves nothing.
+
+set -eu
+
+MSG_FILE="$1"
+
+# The subject line, ignoring comments git will strip.
+SUBJECT=$(grep -v '^#' "$MSG_FILE" | sed '/^[[:space:]]*$/d' | head -1)
+
+# Nothing to check on an empty message: git aborts the commit itself.
+[ -n "$SUBJECT" ] || exit 0
+
+# Machine-generated messages carry their own provenance and are exempt.
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*|"amend!"*) exit 0 ;;
+esac
+# A rebase or an in-flight merge rewrites messages it did not author.
+GITDIR=$(git rev-parse --git-dir)
+for f in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD; do
+  [ -e "$GITDIR/$f" ] && exit 0
+done
+
+BEAD_RE='[a-z][a-z0-9_]*-[a-z0-9]\{2,\}'
+
+if grep -qiE '^Bead:[[:space:]]*none[[:space:]]*[-—]' "$MSG_FILE"; then
+  exit 0
+fi
+
+TRAILER=$(grep -oi "^\(Refs\|Closes\|Fixes\|Part-of\)[[:space:]]\+$BEAD_RE" "$MSG_FILE" || true)
+
+if [ -z "$TRAILER" ]; then
+  cat >&2 <<'EOF'
+commit rejected: no bead trailer.
+
+Add one of these on its own line, at the end of the message:
+
+    Refs hugel4-abc        work that advances a bead
+    Closes hugel4-abc      work that finishes it
+    Part-of hugel4-abc     one commit of several on the same bead
+
+No bead yet? File one first — that is the point:
+
+    bd create "..." -t bug|chore|feature -p 1..4
+
+Genuinely untracked work only:
+
+    Bead: none — <why this needs no bead>
+EOF
+  exit 1
+fi
+
+# Catch a typo'd or invented id while the commit is still cheap to fix. If bd
+# cannot answer -- not installed, database unreachable -- say so and allow it:
+# a hook that blocks every commit when a tool is down is a hook people disable.
+BEAD_ID=$(printf '%s' "$TRAILER" | grep -o "$BEAD_RE" | head -1)
+if command -v bd >/dev/null 2>&1; then
+  if ! bd show "$BEAD_ID" >/dev/null 2>&1; then
+    if bd list >/dev/null 2>&1; then
+      echo "commit rejected: bead '$BEAD_ID' does not exist. Check the id, or file it first." >&2
+      exit 1
+    fi
+    echo "note: could not reach bd to confirm '$BEAD_ID'; allowing the commit." >&2
+  fi
+fi
+
+exit 0
