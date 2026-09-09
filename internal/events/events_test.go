@@ -547,6 +547,72 @@ func TestHealthOfReportsAFailingStreak(t *testing.T) {
 	}
 }
 
+// A garden that cannot be read: not reachable, not healthy, both times nil,
+// Home naming the path that could not be read -- and no error returned,
+// because this is an answer the command must be able to print.
+// The failure this surface exists to catch, in the one filesystem state that
+// used to defeat it: a log path occupied by a directory has never been written
+// and cannot be written, and Emit says so plainly, so health must not answer
+// "healthy, last written just now" off the directory's own mtime.
+func TestHealthOfWillNotCallADirectoryAWrittenLog(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HUGEL_HOME", home)
+	p, err := Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deliberately before any Emit: nothing has ever been written here, and
+	// no failure marker exists either, so the two absences that would
+	// otherwise add up to "healthy" are both in place.
+	if err := os.MkdirAll(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: the log path is a directory and has never been written")
+	}
+	if h.Reachable {
+		t.Error("Health.Reachable = true, want false: nothing can read or write a log that is a directory")
+	}
+	if h.LastWrite != nil {
+		t.Errorf("Health.LastWrite = %v, want nil: that timestamp is the directory's, not a write's", h.LastWrite)
+	}
+}
+
+// The same shape, one path over. markFailing writes the marker by an exclusive
+// create and nothing else ever writes it, so a non-regular file standing there
+// dates nothing -- and a garden whose failure marker cannot be read must not
+// come back healthy on the strength of it.
+func TestHealthOfWillNotTakeAFailureDateFromSomethingItDidNotWrite(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	if err := Emit(Event{Name: "a real write", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(mark, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: the failure marker cannot be read")
+	}
+	if h.FailingSince != nil {
+		t.Errorf("Health.FailingSince = %v, want nil: that timestamp is the directory's, not a failure's", h.FailingSince)
+	}
+}
+
 func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {

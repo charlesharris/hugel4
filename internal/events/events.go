@@ -370,6 +370,18 @@ func HealthOf() (Health, error) {
 	}
 
 	if st, err := os.Stat(p); err == nil {
+		if !st.Mode().IsRegular() {
+			// Something that is not a file stands where the log belongs: a
+			// directory, a socket, a device. Emit cannot have written it and
+			// cannot write it now, so its mtime is the intruder's and not a
+			// write's, and trusting it reports a healthy log for a garden
+			// that has never recorded one event -- the exact failure this
+			// whole surface exists to make visible, stated backwards. Demote
+			// rather than guess, the same way the home stat above does when
+			// something that is not a directory stands there.
+			h.Reachable = false
+			return h, nil
+		}
 		t := st.ModTime()
 		h.LastWrite = &t
 	} else if !os.IsNotExist(err) {
@@ -382,6 +394,16 @@ func HealthOf() (Health, error) {
 
 	if mark, err := failMarkPath(); err == nil {
 		if st, err := os.Stat(mark); err == nil {
+			if !st.Mode().IsRegular() {
+				// markFailing only ever creates a regular file, by an
+				// exclusive create, so anything else standing here was not
+				// written by us and its mtime dates nothing. Reading it would
+				// put a fabricated start on a streak, or -- worse -- ignoring
+				// it would call the garden healthy on the strength of a
+				// marker we cannot read. Refuse the answer instead.
+				h.Reachable = false
+				return h, nil
+			}
 			t := st.ModTime()
 			h.FailingSince = &t
 		}
