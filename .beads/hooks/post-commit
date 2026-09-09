@@ -1,0 +1,43 @@
+#!/usr/bin/env sh
+# Not managed by beads. If beads ever ships its own post-commit hook, merge
+# rather than replace, and keep its BEGIN/END markers intact.
+#
+# Warns when .planning/STATE.md has fallen behind HEAD.
+#
+# STATE.md is not updated by committing, and /gsd-next reads it to decide what
+# to recommend. Left alone it drifts silently: this repo reached 19 commits
+# behind while the router cheerfully reported "0% - ready to verify" during
+# active remediation, which reads as authoritative and is not.
+#
+# Why a warning and not an automatic refresh. Rewriting STATE.md here would
+# leave a tracked file dirty after every single commit, and a permanently dirty
+# tracked file is not free: in one session .beads/interactions.jsonl in that
+# state blocked two checkouts and produced a stash conflict that had to be
+# resolved by hand. The drift is only dangerous when it goes unnoticed, so this
+# makes it impossible to not notice, and leaves the write to whoever is about to
+# act on it.
+
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+STATE="$ROOT/.planning/STATE.md"
+[ -f "$STATE" ] || exit 0
+
+# state_head lives in the frontmatter; take only the first match so a body
+# mention cannot shadow it.
+HEAD_SHA=$(sed -n 's/^state_head:[[:space:]]*"\{0,1\}\([0-9a-f]\{7,40\}\)"\{0,1\}[[:space:]]*$/\1/p' "$STATE" | head -1)
+[ -n "$HEAD_SHA" ] || exit 0
+
+# A state_head that is not an ancestor is not drift -- it is a rebase, a reset,
+# or a branch that never contained it. Saying "N behind" there would be noise.
+git merge-base --is-ancestor "$HEAD_SHA" HEAD 2>/dev/null || exit 0
+
+BEHIND=$(git rev-list --count "$HEAD_SHA"..HEAD 2>/dev/null) || exit 0
+[ "$BEHIND" -gt 0 ] || exit 0
+
+printf '\n  note: .planning/STATE.md is %s commit(s) behind HEAD.\n' "$BEHIND" >&2
+printf '        /gsd-next reads it and will misreport until it is refreshed:\n' >&2
+printf '        gsd query state.update "Last Activity" "$(date +%%Y-%%m-%%d)"\n' >&2
+printf '        (any state.update recomputes state_head)\n\n' >&2
+
+exit 0
