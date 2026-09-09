@@ -53,7 +53,10 @@ coverage:
     requirement: "SUB-02"
     verification:
       - kind: unit
-        ref: "grep -c 'if err := f.Sync(); err != nil' internal/events/events.go (must be 1)"
+        ref: "internal/events/events_test.go#TestEmitFlushesBeforeItReturns"
+        status: pass
+      - kind: unit
+        ref: "internal/events/events_test.go#TestAFailedFlushIsReportedAndMarksTheGarden"
         status: pass
       - kind: unit
         ref: "grep -c 'sync event log: %w' internal/events/events.go (must be 1)"

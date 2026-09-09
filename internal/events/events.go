@@ -47,6 +47,15 @@ import (
 // now is the clock, replaced in tests.
 var now = time.Now
 
+// syncFile is the flush, replaced in tests. A real fsync is not observable
+// from go test -- a power-loss test cannot be written and a failing fsync
+// cannot be provoked portably -- so without a seam the sync is held by nothing
+// but a grep over this file, and deleting the call leaves every test green.
+// The seam does not test the platform's promise, which is not ours to test; it
+// tests ours: that Emit flushes before it returns, and that a flush that fails
+// is reported and marks the garden rather than passing for success.
+var syncFile = (*os.File).Sync
+
 // F is a bag of fields. Anything JSON can carry belongs in it: the whole point
 // is that a field nobody planned for costs nothing to add.
 type F map[string]any
@@ -252,7 +261,7 @@ func Emit(e Event) error {
 	// this return, and Emit would report success on data that never reached
 	// the file. Close stays deferred — once Sync has succeeded the bytes are
 	// durable, and a later close failure does not undo that.
-	if err := f.Sync(); err != nil {
+	if err := syncFile(f); err != nil {
 		markFailing()
 		return fmt.Errorf("sync event log: %w", err)
 	}

@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,9 +170,11 @@ func TestEmitReturnsAnErrorWhenTheLogCannotBeWritten(t *testing.T) {
 // This proves the narrower, testable claim: nothing of ours is holding the
 // event in a buffer between Emit returning and a fresh reader looking for it.
 // The fsync itself is a platform promise a power-loss test cannot observe from
-// go test on either macOS or Linux, and a failing fsync cannot be provoked
-// portably either -- the presence and checking of the Sync call are held by
-// the source assertions in this test's plan task instead of by this test.
+// go test on either macOS or Linux. It is a weaker claim than it looks: a
+// write(2) has already put the bytes in the page cache, so a fresh reader on
+// this machine sees them whether or not anything was flushed, and this test
+// passes with the Sync deleted. What holds the flush is the syncFile seam and
+// the two tests below it.
 func TestEmitIsDurableBeforeItReturns(t *testing.T) {
 	t.Setenv("HUGEL_HOME", t.TempDir())
 
@@ -194,6 +197,63 @@ func TestEmitIsDurableBeforeItReturns(t *testing.T) {
 	// no space between them.
 	if !strings.Contains(string(b), `"name":"durable-before-return"`) {
 		t.Fatalf("log after Emit returned = %q, want it to already contain the event's name", b)
+	}
+}
+
+// The seam earns itself here: without it, deleting Emit's flush leaves the
+// whole package green, because a page-cache read cannot tell a synced write
+// from an unsynced one. This asks the only question that is ours to ask --
+// did Emit flush the handle it wrote, before it returned nil.
+func TestEmitFlushesBeforeItReturns(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	var synced int
+	restore := syncFile
+	syncFile = func(f *os.File) error {
+		synced++
+		return restore(f)
+	}
+	t.Cleanup(func() { syncFile = restore })
+
+	if err := Emit(Event{Name: "flushed-before-return", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if synced != 1 {
+		t.Errorf("flushes during one Emit = %d, want 1", synced)
+	}
+}
+
+// A flush that fails is the case the log exists to survive: the bytes reached
+// the OS but not the disk, and reporting nil there would make silence in the
+// log mean the wrong thing. It cannot be provoked by any filesystem the test
+// can build, so the seam provokes it directly.
+func TestAFailedFlushIsReportedAndMarksTheGarden(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+
+	restore := syncFile
+	syncFile = func(*os.File) error { return errors.New("no space left on device") }
+	t.Cleanup(func() { syncFile = restore })
+
+	err := Emit(Event{Name: "flush-fails", Bead: "x-1"})
+	if err == nil {
+		t.Fatal("Emit = nil error, want one: the flush failed")
+	}
+	if !strings.Contains(err.Error(), "sync event log") {
+		t.Errorf("Emit err = %v, want it to name %q", err, "sync event log")
+	}
+	if !strings.Contains(err.Error(), "no space left on device") {
+		t.Errorf("Emit err = %v, want it to carry the underlying flush failure", err)
+	}
+
+	// A write that reached the OS but not the disk is a failing garden, not a
+	// healthy one: the marker is what lets health report the streak later.
+	mark, err := failMarkPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(mark); err != nil {
+		t.Errorf("failure marker missing after a failed flush: %v", err)
 	}
 }
 
@@ -487,9 +547,6 @@ func TestHealthOfReportsAFailingStreak(t *testing.T) {
 	}
 }
 
-// A garden that cannot be read: not reachable, not healthy, both times nil,
-// Home naming the path that could not be read -- and no error returned,
-// because this is an answer the command must be able to print.
 func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
