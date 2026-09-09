@@ -56,6 +56,41 @@ var now = time.Now
 // is reported and marks the garden rather than passing for success.
 var syncFile = (*os.File).Sync
 
+// The two halves of the writability probe, replaced in tests. A filesystem
+// with no room left cannot be built inside go test, and a permission-denied
+// path can -- which is why the permission half is pinned by real chmod tests
+// below and the free-space half needs a seam to be pinned at all. Without one,
+// deleting the entire Statfs call leaves the suite green, which is the defect
+// that produced syncFile one plan earlier and reappeared here.
+var (
+	permitsWrite    = platformPermitsWrite
+	blocksAvailable = platformBlocksAvailable
+)
+
+// writable answers whether a write at path could succeed, without writing
+// there. It is the question Emit will ask the kernel a moment later, asked
+// early so health can tell "nothing has run" apart from "nothing could be
+// recorded" -- two absences that look identical on disk.
+//
+// Permission is not the only way a write gets refused, and the other way is the
+// one Success Criterion 1 names: a full disk. A filesystem that reports no
+// available blocks is one whose next write may not land, and whose failure
+// could not be marked either, since a marker needs an inode too.
+//
+// A filesystem that will not answer is not a filesystem in trouble. Permission
+// already said yes, and manufacturing a failure from a missing second opinion
+// would put "unknown" on healthy gardens.
+func writable(path string) bool {
+	if !permitsWrite(path) {
+		return false
+	}
+	avail, err := blocksAvailable(path)
+	if err != nil {
+		return true
+	}
+	return avail > 0
+}
+
 // F is a bag of fields. Anything JSON can carry belongs in it: the whole point
 // is that a field nobody planned for costs nothing to add.
 type F map[string]any

@@ -797,6 +797,75 @@ func TestHealthOfKeepsADatedFailureRatherThanAnsweringUnknown(t *testing.T) {
 	}
 }
 
+// A full filesystem is the state Success Criterion 1 names and the one no test
+// can build: go test cannot fill a disk, and mounting an image needs privileges
+// and a platform. The seam is what makes the check pinnable at all -- without
+// it the entire Statfs call could be deleted and every test here would still
+// pass, which is exactly how the fsync check shipped hollow one plan earlier.
+func TestHealthOfWillNotCallAFullFilesystemHealthy(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	if err := Emit(Event{Name: "landed while there was room", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := blocksAvailable
+	blocksAvailable = func(string) (uint64, error) { return 0, nil }
+	t.Cleanup(func() { blocksAvailable = restore })
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Healthy {
+		t.Error("Health.Healthy = true, want false: the filesystem has no blocks left to give")
+	}
+	if h.Reachable {
+		t.Error("Health.Reachable = true, want false: a write that cannot be promised cannot be called healthy")
+	}
+}
+
+// The other half of that contract, and the easier one to get wrong: a
+// filesystem that declines to answer is not a filesystem in trouble. Reading a
+// failed Statfs as bad news would put "unknown" on healthy gardens, which is
+// the over-demotion this package keeps having to avoid.
+func TestAFilesystemThatWillNotAnswerIsNotABadOne(t *testing.T) {
+	t.Setenv("HUGEL_HOME", t.TempDir())
+	if err := Emit(Event{Name: "landed", Bead: "x-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := blocksAvailable
+	blocksAvailable = func(string) (uint64, error) { return 0, errors.New("statfs: function not implemented") }
+	t.Cleanup(func() { blocksAvailable = restore })
+
+	h, err := HealthOf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !h.Healthy {
+		t.Error("Health.Healthy = false, want true: permission said yes and nothing contradicted it")
+	}
+}
+
+// The seam is only worth having if the thing behind it is real. This is what
+// catches a Statfs call replaced by a constant zero or a bare error -- either
+// would demote every garden on the machine.
+//
+// It does NOT catch a mutation returning a hardcoded large number, and saying
+// so is the honest limit: the Bavail > 0 predicate against a genuinely full
+// filesystem is checked by hand, on a mounted image, not here.
+func TestTheRealFreeSpaceProbeAnswersForAWritableDirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	avail, err := platformBlocksAvailable(dir)
+	if err != nil {
+		t.Fatalf("platformBlocksAvailable(%q) = %v, want a working filesystem under a temp dir", dir, err)
+	}
+	if avail == 0 {
+		t.Errorf("platformBlocksAvailable(%q) = 0, want blocks free: a temp dir this test just wrote to is not full", dir)
+	}
+}
+
 func TestHealthOfRefusesToGuessWhenTheGardenCannotBeRead(t *testing.T) {
 	garden := filepath.Join(t.TempDir(), "unwritable")
 	if err := os.WriteFile(garden, []byte("i am a file, not a directory"), 0o644); err != nil {
