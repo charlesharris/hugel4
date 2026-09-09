@@ -330,6 +330,55 @@ is deleted (M4). The one criterion left untouched is the `defer f.Close() = 1` c
 wrong and was wrong before this branch existed — leaving a failing assertion visible is the honest
 outcome there.
 
+### Human Verification Record
+
+Recorded 2026-09-09 by the gardener (Charles Harris), in session. This section
+records a person's judgment on the two items in Human Verification Required
+below. It does not alter the verdict in the frontmatter, which is the
+verifier's to set.
+
+**Item 2 — durability prohibition: ACCEPTED.**
+
+Judgment: the `Emit` doc comment claims only what the platform provides. It says
+the data left the process and the OS accepted it "and nothing stronger", names
+`fsync(2)` rather than `F_FULLFSYNC`, and cites golang/go#26650. All three
+mechanical checks confirmed against the source at the time of acceptance.
+
+Context for the acceptance: raising the guarantee to `F_FULLFSYNC` was explored
+during phase 01 UAT and declined on the grounds that SUB-02 promises durability
+across *a crash*, and `write(2)` alone already survives a process crash — the OS
+holds the bytes once it returns. `F_FULLFSYNC` buys power-loss durability, which
+SUB-02 does not claim, at the cost of a drive-cache flush on every event. This
+comment is the record of that ceiling.
+
+The prohibition moves from `unverified-prohibition, human review recommended` to
+human-accepted.
+
+**Item 1 — dogfood `--health` against the real garden: HALF VERIFIED.**
+
+The read-only half is verified with evidence, against `~/.hugel`:
+
+| Check | Result |
+|---|---|
+| `hugel yield --health` | `healthy` / `last write: 2026-09-01 16:36 (8d ago)` |
+| Reading matches reality | `events.jsonl` mtime is genuinely 2026-09-01 |
+| `events.jsonl` before/after | byte-identical (`13073`, `727bb9737da6`) |
+| Every other hugel-owned file | unchanged |
+
+One file in the garden did change across the run — `ralph-state.json` — and it
+is not hugel's: the string `ralph` appears nowhere in the Go source, and the
+file was observed changing again with no hugel invocation between samples. The
+writes-nothing guarantee holds.
+
+The remaining half — confirming the reported last-write *advances* after a real
+emitting run — is deferred to bead `hugel4-vvd` rather than closed here. The only
+emitters today are `gate`, `tender` and `dispatch`; each lands a bead or spawns
+an unattended tmux session, so none was run against the gardener's real setup
+without being asked for. Phase 2 adds cheaper emitters (compost, soil, spike,
+pile review) which should make this trivial to close.
+
+---
+
 ### Human Verification Required
 
 1. **Dogfood `--health` against the real garden.**
