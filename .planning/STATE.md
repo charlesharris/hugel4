@@ -1,18 +1,16 @@
 ---
 gsd_state_version: "1.0"
-current_phase_name: Trustworthy Event Writes
-status: verifying
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-09-11T20:14:03.647Z"
-last_activity: 2026-09-09
-state_head: 4a045e5695b3cb92f180078578b31ccf5ca183ed
+milestone: v0.2
+milestone_name: The Shared Garden
+status: planning
+last_updated: "2026-09-11T20:15:40.036Z"
+last_activity: 2026-09-11
 progress:
-  total_phases: 6
+  total_phases: 0
   completed_phases: 0
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 0
+  completed_plans: 0
   percent: 0
-current_phase: 01
 ---
 
 # Project State
@@ -26,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 
 ## Current Position
 
-Phase: none active — milestone v0.2 setup, between research and requirements
-Plan: n/a
-Status: v0.2 researched; REQUIREMENTS.md and the roadmap are the next step. ROADMAP.md still describes the v0.1 phases, so any "Phase 01 of 6" summary is stale. Phase 01 itself is verified 4/4 and sits at human_needed on one dogfood item (hugel4-vvd).
-Last activity: 2026-09-09
-
-Progress: [░░░░░░░░░░] 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-09-11 — Milestone v0.2 started
 
 ## Performance Metrics
 
