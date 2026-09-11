@@ -112,51 +112,90 @@ Deferred. Tracked but not in the current roadmap.
 
 ## Traceability
 
-Every v1 requirement maps to exactly one phase. Filled during roadmap creation.
+Every requirement in the active milestone maps to exactly one phase.
+Milestone v0.2 owns Phases 7–11. Phases 1–6 belonged to milestone v0.1; only
+Phase 1 was executed, and the rest are recorded in `ROADMAP.md` under
+*Prior Milestone: v0.1*.
+
+### Milestone v0.2 — The Shared Garden (Phases 7–11)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | Phase 1 | Gaps Found |
-| SUB-02 | Phase 1 | Gaps Found |
-| SUB-03 | Phase 1 | Gaps Found |
-| SUB-04 | Phase 2 | Pending |
-| SUB-05 | Phase 2 | Pending |
-| SUB-06 | Phase 2 | Pending |
-| SUB-07 | Phase 2 | Pending |
-| SUB-08 | Phase 2 | Pending |
-| SUB-09 | Phase 3 | Pending |
-| SUB-10 | Phase 3 | Pending |
-| SUB-11 | Phase 3 | Pending |
-| GRAPH-01 | Phase 4 | Pending |
-| GRAPH-02 | Phase 4 | Pending |
-| GRAPH-03 | Phase 4 | Pending |
-| GRAPH-04 | Phase 4 | Pending |
-| GRAPH-05 | Phase 4 | Pending |
-| GRAPH-06 | Phase 4 | Pending |
-| SURF-01 | Phase 5 | Pending |
-| SURF-02 | Phase 5 | Pending |
-| SURF-03 | Phase 5 | Pending |
-| LOOP-01 | Phase 6 | Pending |
-| LOOP-02 | Phase 6 | Pending |
-| LOOP-03 | Phase 6 | Pending |
+| STORE-02 | Phase 7 | Pending |
+| STORE-03 | Phase 7 | Pending |
+| STORE-10 | Phase 7 | Pending |
+| QUEUE-01 | Phase 7 | Pending |
+| QUEUE-02 | Phase 7 | Pending |
+| QUEUE-03 | Phase 7 | Pending |
+| QUEUE-04 | Phase 7 | Pending |
+| QUEUE-05 | Phase 7 | Pending |
+| STORE-01 | Phase 8 | Pending |
+| STORE-04 | Phase 8 | Pending |
+| STORE-08 | Phase 8 | Pending |
+| STORE-09 | Phase 8 | Pending |
+| STORE-05 | Phase 9 | Pending |
+| STORE-06 | Phase 9 | Pending |
+| STORE-07 | Phase 9 | Pending |
+| SURV-01 | Phase 10 | Pending |
+| SURV-02 | Phase 10 | Pending |
+| SURV-03 | Phase 10 | Pending |
+| SURV-04 | Phase 10 | Pending |
+| GRAPH-01 | Phase 11 | Pending |
+| GRAPH-02 | Phase 11 | Pending |
+| GRAPH-03 | Phase 11 | Pending |
+| GRAPH-04 | Phase 11 | Pending |
+| GRAPH-05 | Phase 11 | Pending |
+| GRAPH-06 | Phase 11 | Pending |
 
-**Coverage:**
+**Coverage (v0.2):**
 
-- v1 requirements: 23 total
-- Mapped to phases: 23 ✓
+- Milestone v0.2 requirements: 25 total (STORE ×10, QUEUE ×5, SURV ×4, GRAPH ×6)
+- Mapped to phases: 25 ✓
 - Unmapped: 0
+- Mapped twice: 0
 
 **By phase:**
 
-| Phase | Requirements |
-|-------|--------------|
-| 1. Trustworthy Event Writes | SUB-01, SUB-02, SUB-03 |
-| 2. Wide Events From Every Subsystem | SUB-04, SUB-05, SUB-06, SUB-07, SUB-08 |
-| 3. Relations The Event Log Cannot Carry | SUB-09, SUB-10, SUB-11 |
-| 4. The Stored Relation Graph | GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06 |
-| 5. The Resident Garden | SURF-01, SURF-02, SURF-03 |
-| 6. The Work Loop Closes | LOOP-01, LOOP-02, LOOP-03 |
+| Phase | Requirements | Count |
+|-------|--------------|-------|
+| 7. A Queue The Network Cannot Stop | STORE-02, STORE-03, STORE-10, QUEUE-01, QUEUE-02, QUEUE-03, QUEUE-04, QUEUE-05 | 8 |
+| 8. The Event Log And The Draw Log Move Into Postgres | STORE-01, STORE-04, STORE-08, STORE-09 | 4 |
+| 9. The Pile Moves, And Its History Is Replaced Rather Than Lost | STORE-05, STORE-06, STORE-07 | 3 |
+| 10. A Restore That Has Actually Been Run | SURV-01, SURV-02, SURV-03, SURV-04 | 4 |
+| 11. The Relation Graph, On Apache AGE | GRAPH-01, GRAPH-02, GRAPH-03, GRAPH-04, GRAPH-05, GRAPH-06 | 6 |
+
+### Carried forward from milestone v0.1
+
+The Graph category moved into v0.2 and is mapped above. The rest were defined in
+v0.1's roadmap, never executed, and are tracked here rather than scheduled.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SUB-01 | Phase 1 (v0.1) | Gaps Found — phase verified 4/4 at `human_needed`, pending a real-gate dogfood of `--health` (`hugel4-vvd`) |
+| SUB-02 | Phase 1 (v0.1) | Gaps Found — as above |
+| SUB-03 | Phase 1 (v0.1) | Gaps Found — as above |
+| SUB-04 | — | Deferred (v0.1 Phase 2, not executed) |
+| SUB-05 | — | Deferred (v0.1 Phase 2, not executed) |
+| SUB-06 | — | Deferred (v0.1 Phase 2, not executed) |
+| SUB-07 | — | Deferred (v0.1 Phase 2, not executed) |
+| SUB-08 | — | Deferred (v0.1 Phase 2, not executed) |
+| SUB-09 | — | Deferred (v0.1 Phase 3, not executed) |
+| SUB-10 | — | Deferred (v0.1 Phase 3, not executed) |
+| SUB-11 | — | Deferred (v0.1 Phase 3, not executed) |
+| SURF-01 | — | Deferred (v0.1 Phase 5, not executed) |
+| SURF-02 | — | Deferred (v0.1 Phase 5, not executed) |
+| SURF-03 | — | Deferred (v0.1 Phase 5, not executed) |
+| LOOP-01 | — | Deferred (v0.1 Phase 6, not executed) |
+| LOOP-02 | — | Deferred (v0.1 Phase 6, not executed) |
+| LOOP-03 | — | Deferred (v0.1 Phase 6, not executed) |
+
+**Known coupling.** SUB-04 … SUB-08 (widen event emission, carry ids rather than
+counts) and SUB-09 (stop discarding bd's ticket↔ticket edges) are what would give
+GRAPH-06 non-trivial structure to rank with. They are deferred, so GRAPH-06 ships
+in Phase 11 proven against the edges already derivable today and flagged there as a
+known risk. See `ROADMAP.md` Phase 11, *Known risk*.
 
 ---
 *Requirements defined: 2026-09-08*
-*Last updated: 2026-09-08 after roadmap creation (traceability filled)*
+*Milestone v0.2 requirements scoped: 2026-09-11*
+*Last updated: 2026-09-11 after v0.2 roadmap creation (traceability filled, Phases 7–11)*

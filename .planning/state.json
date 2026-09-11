@@ -1,43 +1,38 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": null,
+  "milestone": "v0.2",
   "phases": [
     {
-      "number": "1",
-      "name": "Trustworthy Event Writes",
-      "status": "in_progress"
-    },
-    {
-      "number": "2",
-      "name": "Wide Events From Every Subsystem",
+      "number": "7",
+      "name": "A Queue The Network Cannot Stop",
       "status": "pending"
     },
     {
-      "number": "3",
-      "name": "Relations The Event Log Cannot Carry",
+      "number": "8",
+      "name": "The Event Log And The Draw Log Move Into Postgres",
       "status": "pending"
     },
     {
-      "number": "4",
-      "name": "The Stored Relation Graph",
+      "number": "9",
+      "name": "The Pile Moves, And Its History Is Replaced Rather Than Lost",
       "status": "pending"
     },
     {
-      "number": "5",
-      "name": "The Resident Garden",
+      "number": "10",
+      "name": "A Restore That Has Actually Been Run",
       "status": "pending"
     },
     {
-      "number": "6",
-      "name": "The Work Loop Closes",
+      "number": "11",
+      "name": "The Relation Graph, On Apache AGE",
       "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd:progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 01 of 6 · 0% · ready to verify"
+    "command": "/gsd:discuss-phase 7",
+    "label": "Discuss Phase 7",
+    "reason": "v0.2 roadmap written — Phases 7-11 mapped, none planned yet"
   },
-  "updated_at": "2026-09-09T02:17:04.156Z"
+  "updated_at": "2026-09-11T22:30:00.000Z"
 }
