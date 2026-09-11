@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-11T20:13:32.658Z",
+  "timestamp": "2026-09-11T20:28:53.223Z",
   "phase": null,
-  "phase_name": "Milestone v0.2 setup \u2014 The Shared Garden",
+  "phase_name": "Milestone v0.2 setup \u2014 roadmap in progress",
   "phase_dir": null,
   "plan": null,
   "task": null,
@@ -32,30 +32,43 @@
       "name": "Pile and ordering decisions recorded; lost requirements group restored",
       "status": "done",
       "commit": "71f4b9e"
+    },
+    {
+      "id": 5,
+      "name": "Switch STATE.md to v0.2; archive v0.1 phases to milestones/v0.1-phases/",
+      "status": "done",
+      "commit": "cd5e771"
+    },
+    {
+      "id": 6,
+      "name": "Define v0.2 requirements: STORE-01..10, QUEUE-01..05, SURV-01..04, GRAPH amended",
+      "status": "done",
+      "commit": "f4ca745"
     }
   ],
   "remaining_tasks": [
     {
-      "id": 5,
-      "name": "Write .planning/REQUIREMENTS.md with REQ-IDs for v0.2",
-      "status": "not_started"
-    },
-    {
-      "id": 6,
-      "name": "Spawn gsd-roadmapper to build the v0.2 phase structure",
-      "status": "not_started"
-    },
-    {
       "id": 7,
-      "name": "Reconcile ROADMAP.md \u2014 it still describes v0.1 phases 1-6",
+      "name": "Roadmapper returns; review phase table and requirement coverage",
+      "status": "in_progress",
+      "progress": "gsd-roadmapper spawned on opus, writing ROADMAP.md / STATE.md / REQUIREMENTS.md traceability"
+    },
+    {
+      "id": 8,
+      "name": "Commit the roadmap, merge chore/milestone-v0.2-requirements to main, push both",
+      "status": "not_started"
+    },
+    {
+      "id": 9,
+      "name": "/gsd-plan-phase 7 \u2014 first v0.2 phase (expected: storage seam + test harness)",
       "status": "not_started"
     }
   ],
   "blockers": [
     {
-      "description": "ROADMAP.md still describes the v0.1 phases, so smart-entry reports 'Phase 01 of 6 - ready to verify'. That is stale, not a real position. It resolves when the v0.2 roadmap is written.",
+      "description": "ROADMAP.md still described the v0.1 phases; the roadmapper is rewriting it now. Until it returns, any 'Phase 01 of 6' summary is stale.",
       "type": "technical",
-      "workaround": "Resume at requirements via /gsd-new-milestone; do not act on the smart-entry summary until the roadmap is rebuilt."
+      "workaround": "Wait for the roadmapper. If this session ended mid-run, re-spawn gsd-roadmapper with the brief in remaining_tasks[0] rather than hand-writing the roadmap."
     }
   ],
   "async_jobs": [],
@@ -109,9 +122,13 @@
     }
   ],
   "uncommitted_files": [
+    "D  .planning/.continue-here.md",
+    " M .planning/state.json",
     "?? .gsd/",
-    "?? .planning/milestone.lock"
+    "?? .planning/.gsd-allow-shrink",
+    "?? .planning/milestone.lock",
+    "?? .planning/milestones/v0.1-phases/ROADMAP-v0.1.md"
   ],
-  "next_action": "Run /gsd-new-milestone to resume at step 7 (requirements). PROJECT.md, the four decisions and .planning/research/SUMMARY.md are all in place; SUMMARY.md carries a reconciled 7-phase build order for the roadmapper.",
-  "context_notes": "Milestone v0.2 was opened after a direction change: Postgres for the log, the relational store and the graph, replacing the JSONL substrate. Research is complete and committed (5 docs, 232K). SUMMARY.md proposes: storage seam + test harness, local write queue, convert events, convert draws, convert pile, backup/restore drill, AGE graph. Two research caveats are deliberately unsettled and flagged MEDIUM: pg_upgrade/AGE incompatibility, and AGE Cypher coverage. Recurring theme worth carrying: this project keeps hitting guarantees that report success while doing nothing - a test passing with the code deleted, a health check reporting the opposite of the truth, and a str.replace that matched nothing while its commit message described the change. Verify after writing rather than trusting a clean exit."
+  "next_action": "Wait for the gsd-roadmapper result, then review coverage (every v0.2 requirement mapped to exactly one phase) and what it did with GRAPH-06, which was flagged as blocked on substrate widening. Then commit, merge to main, push, and run /gsd-plan-phase 7.",
+  "context_notes": "Milestone v0.2 was opened after a direction change: Postgres for the log, the relational store and the graph, replacing the JSONL substrate. Research is complete and committed (5 docs, 232K). SUMMARY.md proposes: storage seam + test harness, local write queue, convert events, convert draws, convert pile, backup/restore drill, AGE graph. Two research caveats are deliberately unsettled and flagged MEDIUM: pg_upgrade/AGE incompatibility, and AGE Cypher coverage. Recurring theme worth carrying: this project keeps hitting guarantees that report success while doing nothing - a test passing with the code deleted, a health check reporting the opposite of the truth, and a str.replace that matched nothing while its commit message described the change. Verify after writing rather than trusting a clean exit. UPDATE 2026-09-11: requirements are done and committed (f4ca745); the roadmap is the only remaining setup step. .planning/.continue-here.md was deleted here because its instruction ('resume at requirements') became false and a stale checkpoint hard-stops /gsd-progress --next at Gate 1 for no reason. This file is now the sole recovery artifact \u2014 keep it accurate."
 }
