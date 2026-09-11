@@ -1,0 +1,117 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-11T20:13:32.658Z",
+  "phase": null,
+  "phase_name": "Milestone v0.2 setup \u2014 The Shared Garden",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Milestone questioning \u2014 scope, topology, offline behaviour, ownership",
+      "status": "done",
+      "commit": "51e23c7"
+    },
+    {
+      "id": 2,
+      "name": "PROJECT.md rewritten for v0.2: constraints inverted, out-of-scope amended, 10 decision rows",
+      "status": "done",
+      "commit": "51e23c7"
+    },
+    {
+      "id": 3,
+      "name": "Parallel project research (stack, features, architecture, pitfalls) + synthesis",
+      "status": "done",
+      "commit": "733c2de"
+    },
+    {
+      "id": 4,
+      "name": "Pile and ordering decisions recorded; lost requirements group restored",
+      "status": "done",
+      "commit": "71f4b9e"
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 5,
+      "name": "Write .planning/REQUIREMENTS.md with REQ-IDs for v0.2",
+      "status": "not_started"
+    },
+    {
+      "id": 6,
+      "name": "Spawn gsd-roadmapper to build the v0.2 phase structure",
+      "status": "not_started"
+    },
+    {
+      "id": 7,
+      "name": "Reconcile ROADMAP.md \u2014 it still describes v0.1 phases 1-6",
+      "status": "not_started"
+    }
+  ],
+  "blockers": [
+    {
+      "description": "ROADMAP.md still describes the v0.1 phases, so smart-entry reports 'Phase 01 of 6 - ready to verify'. That is stale, not a real position. It resolves when the v0.2 roadmap is written.",
+      "type": "technical",
+      "workaround": "Resume at requirements via /gsd-new-milestone; do not act on the smart-entry summary until the roadmap is rebuilt."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Run a real gate or tender, then `hugel yield --health` before and after",
+      "context": "Closes hugel4-vvd, the last item holding phase 01 at human_needed. No test can do it: config.Sandbox panics if a test resolves the real garden.",
+      "blocking": false
+    },
+    {
+      "action": "Re-verify the pg_upgrade/AGE incompatibility against github.com/apache/age",
+      "context": "MEDIUM confidence, partly vendor-doc-derived. It shapes the backup/restore phase and must not be banked as settled.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Postgres becomes the substrate for events, draws and the pile; bd keeps owning beads, Postgres carries bead ids only",
+      "rationale": "One queryable store for the relations without replacing bd's Dolt storage and git-backed sync",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "Shared/remote topology, one gardener now, actor id on every row from the first migration",
+      "rationale": "Team use becomes configuration rather than a schema rewrite",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "Writes never block on the network: durable local queue, drains when reachable",
+      "rationale": "Built on phase 01's Emit/failure-marker/HealthOf; that work becomes the foundation rather than being discarded",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "Pile CONTENT moves into Postgres, not only metadata",
+      "rationale": "SQL ranking and joins rather than a boundary crossing; git-diffable history replaced in the same phase as the migration",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "UUIDv7 minted at emit for identity, creation order and idempotency",
+      "rationale": "Ordering survives the queue drain, where a server sequence would stamp a backlog with the drain time",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "Server sequence for ingest order; actor id for provenance",
+      "rationale": "UUIDv7 encodes the emitting machine's clock and carries no node field, so it cannot answer either question alone",
+      "phase": "v0.2"
+    },
+    {
+      "decision": "Relation graph via Postgres + Apache AGE",
+      "rationale": "SQL/PGQ was reverted from PG19 on 2026-09-07; earliest return PG20 ~Sept 2027",
+      "phase": "v0.2"
+    }
+  ],
+  "uncommitted_files": [
+    "?? .gsd/",
+    "?? .planning/milestone.lock"
+  ],
+  "next_action": "Run /gsd-new-milestone to resume at step 7 (requirements). PROJECT.md, the four decisions and .planning/research/SUMMARY.md are all in place; SUMMARY.md carries a reconciled 7-phase build order for the roadmapper.",
+  "context_notes": "Milestone v0.2 was opened after a direction change: Postgres for the log, the relational store and the graph, replacing the JSONL substrate. Research is complete and committed (5 docs, 232K). SUMMARY.md proposes: storage seam + test harness, local write queue, convert events, convert draws, convert pile, backup/restore drill, AGE graph. Two research caveats are deliberately unsettled and flagged MEDIUM: pg_upgrade/AGE incompatibility, and AGE Cypher coverage. Recurring theme worth carrying: this project keeps hitting guarantees that report success while doing nothing - a test passing with the code deleted, a health check reporting the opposite of the truth, and a str.replace that matched nothing while its commit message described the change. Verify after writing rather than trusting a clean exit."
+}
