@@ -9,14 +9,40 @@ the next piece of work. The garden is the surface you sit in front of: the state
 of your projects (beds), the state of accumulated knowledge (the pile), and
 whatever is waiting on a human decision.
 
-It is built for one gardener working across many projects, and it is instrumented
-so the cost of the context it delivers is always visible against the work that
-context produced.
+It is built for one gardener working across many projects and, as of v0.2, across
+many machines: the garden lives in a shared Postgres database rather than in files
+under one home directory. It is instrumented so the cost of the context it
+delivers is always visible against the work that context produced.
 
 ## Core Value
 
 Work done by agents leaves behind why it was done that way — and that record is
 cheap enough to deliver back into the next session that it actually gets used.
+
+## Current Milestone: v0.2 The Shared Garden
+
+**Goal:** Move the garden's substrate from files under one home directory into a
+shared Postgres database — and engineer, rather than avoid, the guarantee that it
+cannot be lost.
+
+**Target features:**
+- Events, draws and the pile live in Postgres; bd stays authoritative for beads,
+  with bead ids carried in Postgres so relations reach everything else
+- Relations queried as a property graph (Apache AGE) rather than hand-rolled joins
+- One garden reachable from several machines, with an actor id on every row so
+  team use is a configuration change and not a migration
+- Writes never block on the network: a durable local queue accepts them and drains
+  when the database is reachable
+- Losing the garden is engineered against and *proven* against — a restore that
+  has never been performed is not a backup
+
+**The reframe this milestone rests on.** Every graph hugel kept previously died
+with the store it lived in, and the conclusion drawn at the time was to avoid
+stores that can die. That was the wrong lesson to draw. The right one is that a
+durability guarantee nobody exercises is not a guarantee — which is the same thing
+phase 01 learned about tests that pass whether or not the code is there. So this
+milestone keeps the structure and engineers the survival: export, backup, replay,
+and a restore drill that actually runs.
 
 ## Requirements
 
@@ -47,7 +73,7 @@ be derived from it, and almost nothing is recorded today.
 
 **Substrate — record what is currently ephemeral**
 
-- [ ] **Make event writes fail loudly** — `events.Record` returns nothing and swallows every error: four bare `return`s and a discarded `f.Write`. A full disk, a permissions change or a bad `HUGEL_HOME` drops events with no signal, and there is no fsync. `draws.Append` already handles this correctly. Until this is fixed, a stale log cannot be distinguished from a failing one.
+- [x] **Make event writes fail loudly** — done in phase 01 (v0.1). `Emit` returns its error at all ten production call sites, fsyncs before returning, and `yield --health` distinguishes "nothing has run" from "writes have been failing" across every filesystem state including a full disk. Carried forward rather than retired: this is what makes the v0.2 local write queue trustworthy.
 - [ ] **Widen event emission** — one wide event per unit of work from every subsystem, not two. Today `~/.hugel/events.jsonl` holds 32 events, all from `gate.*` and `tender.start`, last written 2026-09-01. Nothing from compost, soil, spike, dispatch, review, land or handback.
 - [ ] **Stop discarding bd's dependency graph** — `beads.Bead` collapses dependencies, defer dates and gates into `Ready bool`. bd knows the ticket↔ticket edges; hugel drops them at the boundary. Carry them without recomputing readiness.
 - [ ] **Enrich what a bead carries** — the structural context a graph needs must live somewhere durable and re-readable, in bd or beside it.
@@ -76,8 +102,9 @@ be derived from it, and almost nothing is recorded today.
 - **LLM edge inference at extraction time** — built once already and left nothing behind (`680d9417`).
 - **A graph that cannot be rebuilt** — every graph hugel has kept died with the store it lived in (`internal/cochange/cochange.go`). Storing one is only acceptable while it remains a projection over durable sources.
 - **Hugel writing bd content** — lifecycle transitions only (`Close`, `HandBack`, `Release`).
-- **A clustered or server-backed log (Cassandra, Kafka, Postgres)** — write volume is ~5 events/day against tooling built for six-figure writes/sec, and any of them breaks the single-binary constraint: `hugel garden` would stop working when the cluster is down. The recorded regret runs the other way — every graph hugel kept died with the store it lived in, while flat files survived. JSONL→anything is replaying a text file; Cassandra→anything is a project.
-- **A server, or any external database _as the log_** — single binary, local files, git for versioning. A droppable projection is the one exception, and only because it is rebuildable: originally SQLite, and as of 2026-09-11 Postgres with the Apache AGE extension. The bullet above still holds in full — the *log* is never server-backed, and no fact may live only in the projection, so the store can go down or be deleted without losing anything.
+- **A clustered log (Cassandra, Kafka)** — write volume is ~5 events/day against tooling built for six-figure writes/sec. Postgres was moved *out* of this bullet on 2026-09-11 and is now the substrate; the objection to clusters was never the SQL, it was operating a cluster for a handful of writes a day.
+- **Losing work when the database is unreachable** — a remote substrate must not make `hugel gate` depend on a network. Writes land in a local fsynced queue and drain later; an unreachable database degrades reads, never recording.
+- **Treating a backup as durable before it has been restored** — the explicit reversal of this project's own recorded regret. Every graph hugel kept died with its store, and the answer adopted here is to exercise the restore rather than to avoid the store.
 
 ## Context
 
@@ -118,9 +145,11 @@ replayed, not mourned.
 
 - **Token economy**: Every token of soil that enters a session is re-sent on every later turn — cost is set by how much enters and how early, not by how much the pile holds. A resident TUI must answer to this.
 - **Substrate before projection**: No derived structure may be the only record of a fact. Events store ids rather than counts, and the draw log already proves why — store the count and the measurement does not exist.
-- **The graph is rebuildable or it is not kept**: Storing it is conditional on being able to drop and replay it from events, entries and git.
-- **Log and projection are different things**: JSONL append-only files are the durable source of truth — human-readable, replayable, and the format that has actually survived. The projection (Postgres + AGE) holds only what is derived from them. Nothing may exist solely in the projection. This constraint is what makes a server tolerable at all: when it is down, `hugel garden` and every write path still work, and graph queries are the only thing unavailable.
-- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), `pgx`, no ORM, no config library. No server in the write path; a Postgres + AGE server is required for graph queries only.
+- **The graph is rebuildable or it is not kept**: Storing it is conditional on being able to drop and replay it from the base tables — events, draws, entries, bead ids — and git. Unchanged by v0.2 except in where those facts live.
+- **Postgres is the substrate; the graph is still a projection over it**: as of v0.2 the durable record is Postgres — events, draws and pile entries are tables, not files. Within it the old distinction survives intact one level down: the AGE graph is derived from those tables and nothing may exist solely in it, so it can be dropped and replayed. What changed is which layer is the floor, not the discipline.
+- **The local queue is a write-ahead buffer, not a second source of truth**: writes land locally, fsynced, before the database sees them, so a gate on a dead network still records. It drains and clears; it is not a parallel log to be reconciled. Phase 01's durable append, failure marker and health surface are exactly what makes it trustworthy.
+- **Nothing is kept that cannot be gotten back**: the garden must be exportable to a portable format, restorable from that export, and the restore must be exercised on a schedule rather than assumed. A backup that has never been restored is not a backup, and the previous generation of this project lost every graph it built by assuming otherwise.
+- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), `pgx`, Postgres with Apache AGE, no ORM, no config library. `pgx` is pure Go so the binary stays cgo-free, but a reachable database is now part of the product rather than an optional accelerator.
 - **External tools**: `git` and `tmux` required; `bd` and `claude` optional at the boundaries.
 - **Irreversibility**: Landing is the one step that cannot be undone by deleting a directory — every stage before it is built to refuse.
 - **Provenance**: Entries, sessions and landings are immutable facts; review and status are mutable judgement wrapped around them. Nothing may collapse the two.
@@ -138,6 +167,11 @@ replayed, not mourned.
 | Cassandra and server-backed *logs* rejected | ~5 events/day against tooling for six-figure writes/sec, and a live cluster would become a runtime dependency of a single-binary CLI. Unchanged by the AGE decision, which touches the projection only: the log stays JSONL precisely so the server can be down or deleted without losing a fact | — Pending |
 | Substrate widening precedes the graph | 32 events from two subsystems and a discarded bd dependency graph would derive nothing | — Pending |
 | GSD drives the work loop; hugel supplies context and captures findings | Avoids hugel growing a second planner alongside the one already in use | — Pending |
+| v0.2: Postgres becomes the substrate, not just the projection | Supersedes "JSONL stays the log". One store for events, draws, the pile and the relations between them, queryable as a property graph instead of by scanning files. Accepts that a reachable database is now part of the product | — Pending |
+| The regret is answered by engineering survival, not by avoiding structure | Every graph hugel kept died with its store, and the conclusion drawn then was to avoid such stores. Restated: a durability guarantee nobody exercises is not a guarantee — the same lesson phase 01 learned about tests that pass with the code deleted. Export, backup, replay and a restore drill that runs | — Pending |
+| Writes never block on the network | A remote substrate must not make a gate depend on connectivity. Local fsynced queue, drained later; phase 01's durable-append work becomes its foundation rather than being discarded | — Pending |
+| bd keeps owning beads; Postgres carries bead ids only | Relations reach everything without replacing bd's Dolt storage and git-backed sync, which already works. Much smaller blast radius than migrating the tracker | — Pending |
+| Shared topology, single gardener first | One garden reachable from several machines, with an actor id from the first migration so team use is configuration rather than a rewrite | — Pending |
 
 ## Evolution
 
@@ -157,4 +191,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-08 after initialization*
+*Last updated: 2026-09-11 after starting milestone v0.2 The Shared Garden*
