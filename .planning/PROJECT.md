@@ -71,6 +71,17 @@ and a restore drill that actually runs.
 Ordered by dependency. The substrate has to carry the facts before anything can
 be derived from it, and almost nothing is recorded today.
 
+**Substrate — move the garden into Postgres (v0.2)**
+
+- [ ] **Events, draws and the pile become tables** — including pile *content*, not only its metadata. Decided 2026-09-11: entries become rows so ranking and joins are SQL rather than a boundary crossing. Git-diffable knowledge history does not survive that by default, and its replacement ships in the same phase as the migration rather than being regretted after it. The draw log's shape is the thing to preserve: it stores the ids a draw delivered rather than a count, which is the only reason draw precision is computable at all.
+- [ ] **UUIDv7 identity, minted at emit** — one id per record, generated on the machine that emits it, carrying creation order and doubling as the idempotency key. Ordering survives the write queue: a backlog written offline keeps its creation position, where a server-assigned sequence would stamp it with the drain time. A server sequence runs alongside for ingest order, and the actor id carries provenance, since UUIDv7 has no node field by design.
+- [ ] **A durable local write queue** — writes are accepted, fsynced and acknowledged locally, then drained to Postgres when it is reachable. `hugel gate` and `hugel tender` never block on a network, and a stalled drain is visible rather than silent. Built on phase 01's `Emit`/failure-marker/`HealthOf` mechanism rather than a second one invented beside it.
+- [ ] **Bead ids in Postgres, bd still authoritative** — `bd` keeps owning issues in Dolt; Postgres carries bead ids so relations between beads, events, entries and code live in one queryable place. Hugel does not become a second issue tracker.
+- [ ] **An actor id on every row** — one gardener today, several machines. Attribution is carried from the first migration so multi-gardener use is configuration rather than a schema rewrite, and a machine with a drifting clock is detectable rather than merely disruptive.
+- [ ] **Export, backup and a restore that is actually run** — the garden is exportable to a portable format, restorable from it, and the restore exercised on a schedule. The engineered answer to the regret that every graph hugel kept died with its store.
+- [ ] **Migrate what exists** — the current events log, 22 draw records and the pile's entries move across without loss, with a way to verify the import was faithful. The old files are retained as an archive rather than deleted.
+- [ ] **A test harness that can hold a database** — `config.Sandbox()` panics if a test resolves the garden outside a temp dir, and that guarantee has no database equivalent yet. Nothing above can be honestly tested until it does.
+
 **Substrate — record what is currently ephemeral**
 
 - [x] **Make event writes fail loudly** — done in phase 01 (v0.1). `Emit` returns its error at all ten production call sites, fsyncs before returning, and `yield --health` distinguishes "nothing has run" from "writes have been failing" across every filesystem state including a full disk. Carried forward rather than retired: this is what makes the v0.2 local write queue trustworthy.
@@ -172,6 +183,10 @@ replayed, not mourned.
 | Writes never block on the network | A remote substrate must not make a gate depend on connectivity. Local fsynced queue, drained later; phase 01's durable-append work becomes its foundation rather than being discarded | — Pending |
 | bd keeps owning beads; Postgres carries bead ids only | Relations reach everything without replacing bd's Dolt storage and git-backed sync, which already works. Much smaller blast radius than migrating the tracker | — Pending |
 | Shared topology, single gardener first | One garden reachable from several machines, with an actor id from the first migration so team use is configuration rather than a rewrite | — Pending |
+| Pile content moves into Postgres, not just its metadata | Entries become rows, so ranking and joins are SQL rather than a boundary crossing. Accepts that git-diffable knowledge history does not survive by default and must be deliberately replaced in the same phase as the migration, not regretted after it | — Pending |
+| UUIDv7 for identity, creation order and idempotency | Minted at emit time on the machine that emits. Survives the write queue: a backlog written offline keeps its creation position, where a server-assigned sequence would stamp it with the drain time instead. One id doing the job the research wanted an idempotency key for | — Pending |
+| A server sequence alongside it, for ingest order | UUIDv7 answers "when was this made", which clock skew can distort; the sequence answers "when did the database learn it", which it cannot. Incremental export and sync read the sequence. Two orderings because there are genuinely two questions | — Pending |
+| Provenance is a column, not a field in the id | UUIDv7 carries no node id by design — that was UUIDv1's MAC field and it was dropped deliberately. The actor id already required by the shared topology carries it, and is also what makes a machine with a drifting clock detectable rather than merely disruptive | — Pending |
 
 ## Evolution
 
