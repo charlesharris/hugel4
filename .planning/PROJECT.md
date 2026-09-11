@@ -55,7 +55,7 @@ be derived from it, and almost nothing is recorded today.
 
 **Graph — projected over the substrate**
 
-- [ ] **Stored relation graph, in SQLite** — a queryable graph of code↔code, code↔ticket, ticket↔ticket and entry↔entry relations, projected from the JSONL logs, the pile and git. Droppable and rebuildable by replay, so a migration has nothing irreplaceable to lose. Pure-Go driver (`modernc.org/sqlite`) keeps `go build` yielding one binary with no cgo and no server.
+- [ ] **Stored relation graph, in Postgres + Apache AGE** — a queryable graph of code↔code, code↔ticket, ticket↔ticket and entry↔entry relations, projected from the JSONL logs, the pile and git. Droppable and rebuildable by replay, so a migration has nothing irreplaceable to lose. Queried as a property graph in Cypher rather than as recursive CTEs over an edges table, which is what variable-depth traversal actually wants. `pgx` is pure Go, so hugel's own binary stays cgo-free — but a Postgres server with the AGE extension becomes a runtime requirement for graph queries. Decided 2026-09-11; supersedes the SQLite projection. See the decision log.
 - [ ] **Graph in the draw path** — soil ranking consults structure, not only wording. `cochange` already proves the shape of this.
 
 **Surface**
@@ -77,7 +77,7 @@ be derived from it, and almost nothing is recorded today.
 - **A graph that cannot be rebuilt** — every graph hugel has kept died with the store it lived in (`internal/cochange/cochange.go`). Storing one is only acceptable while it remains a projection over durable sources.
 - **Hugel writing bd content** — lifecycle transitions only (`Close`, `HandBack`, `Release`).
 - **A clustered or server-backed log (Cassandra, Kafka, Postgres)** — write volume is ~5 events/day against tooling built for six-figure writes/sec, and any of them breaks the single-binary constraint: `hugel garden` would stop working when the cluster is down. The recorded regret runs the other way — every graph hugel kept died with the store it lived in, while flat files survived. JSONL→anything is replaying a text file; Cassandra→anything is a project.
-- **A server, or any external database** — single binary, local files, git for versioning. SQLite as a droppable projection is the one exception, and only because it is rebuildable.
+- **A server, or any external database _as the log_** — single binary, local files, git for versioning. A droppable projection is the one exception, and only because it is rebuildable: originally SQLite, and as of 2026-09-11 Postgres with the Apache AGE extension. The bullet above still holds in full — the *log* is never server-backed, and no fact may live only in the projection, so the store can go down or be deleted without losing anything.
 
 ## Context
 
@@ -119,8 +119,8 @@ replayed, not mourned.
 - **Token economy**: Every token of soil that enters a session is re-sent on every later turn — cost is set by how much enters and how early, not by how much the pile holds. A resident TUI must answer to this.
 - **Substrate before projection**: No derived structure may be the only record of a fact. Events store ids rather than counts, and the draw log already proves why — store the count and the measurement does not exist.
 - **The graph is rebuildable or it is not kept**: Storing it is conditional on being able to drop and replay it from events, entries and git.
-- **Log and projection are different things**: JSONL append-only files are the durable source of truth — human-readable, replayable, and the format that has actually survived. SQLite holds only what is derived from them. Nothing may exist solely in the projection.
-- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), no ORM, no config library, no server.
+- **Log and projection are different things**: JSONL append-only files are the durable source of truth — human-readable, replayable, and the format that has actually survived. The projection (Postgres + AGE) holds only what is derived from them. Nothing may exist solely in the projection. This constraint is what makes a server tolerable at all: when it is down, `hugel garden` and every write path still work, and graph queries are the only thing unavailable.
+- **Tech stack**: Go 1.26, Charmbracelet (Bubbletea/Lipgloss), `pgx`, no ORM, no config library. No server in the write path; a Postgres + AGE server is required for graph queries only.
 - **External tools**: `git` and `tmux` required; `bd` and `claude` optional at the boundaries.
 - **Irreversibility**: Landing is the one step that cannot be undone by deleting a directory — every stage before it is built to refuse.
 - **Provenance**: Entries, sessions and landings are immutable facts; review and status are mutable judgement wrapped around them. Nothing may collapse the two.
@@ -133,8 +133,9 @@ replayed, not mourned.
 | The attention list stays sourced solely from bd's `needs-attention` label | One source of truth; preserves the no-inbox refusal structurally rather than by discipline | — Pending |
 | The relation graph is stored, not computed on demand | Queryable persistent structure is worth the staleness cost that `cochange` refused | — Pending |
 | A stored graph must be a droppable, replayable projection | Every graph hugel kept died with its store; a cache over append-only sources cannot die the same way | — Pending |
-| JSONL stays the log; SQLite is the projection over it | Gives indexed graph queries without a server, and a cache that cannot die with its store because it is replayed | — Pending |
-| Cassandra and server-backed logs rejected | ~5 events/day against tooling for six-figure writes/sec, and a live cluster would become a runtime dependency of a single-binary CLI | — Pending |
+| ~~JSONL stays the log; SQLite is the projection over it~~ | Superseded 2026-09-11 by the AGE decision below. The first half stands; only the projection's store changed | — Superseded |
+| JSONL stays the log; Postgres + Apache AGE is the projection over it | Property-graph queries in Cypher express code↔code, code↔ticket, ticket↔ticket and entry↔entry directly, where recursive CTEs over an edges table get worst exactly at the variable-depth traversal the graph exists for. Evaluated against SQL/PGQ in mainline Postgres first: that shipped in PG 19 beta 1 and was reverted 2026-09-07 (47 commits, "multiple design issues too late to address in this release cycle"), earliest return PG 20 ~Sept 2027, so AGE is the route available now. Accepted costs, recorded rather than discovered later: a Postgres server becomes a runtime requirement for graph queries, AGE supports PG 11–18 so the server pins below the current release, and the projection cannot be tested without CI that does not yet exist | — Pending |
+| Cassandra and server-backed *logs* rejected | ~5 events/day against tooling for six-figure writes/sec, and a live cluster would become a runtime dependency of a single-binary CLI. Unchanged by the AGE decision, which touches the projection only: the log stays JSONL precisely so the server can be down or deleted without losing a fact | — Pending |
 | Substrate widening precedes the graph | 32 events from two subsystems and a discarded bd dependency graph would derive nothing | — Pending |
 | GSD drives the work loop; hugel supplies context and captures findings | Avoids hugel growing a second planner alongside the one already in use | — Pending |
 

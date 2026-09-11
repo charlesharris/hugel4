@@ -103,8 +103,8 @@ Plans:
 
   1. A gardener can ask which beads touched a directory, and which entries relate to a bead, and get the answer without a full scan of the logs
   2. The projection holds code↔code, code↔ticket, ticket↔ticket and entry↔entry relations, and each edge can be traced back to the durable source line it was derived from
-  3. A gardener can delete the SQLite file outright, rebuild it by replay from events, entries and git, and lose nothing — no fact exists solely inside the projection
-  4. `go build` still produces one binary, with no cgo and no server process to run
+  3. A gardener can drop the projection outright — the whole AGE graph, or the database — rebuild it by replay from events, entries and git, and lose nothing; no fact exists solely inside the projection
+  4. `go build` still produces one binary with no cgo (`pgx` is pure Go); the Postgres + AGE server is required for graph queries only, and every write path plus `hugel garden` still works with it down or deleted
   5. A draw surfaces entries reached through structure that wording alone would have missed, with the token budget still exactly enforced
 
 **Plans**: TBD
